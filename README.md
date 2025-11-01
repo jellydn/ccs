@@ -21,7 +21,7 @@ ccs sonnet --verbose
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/ccs.git
+git clone https://github.com/kaitranntt/ccs.git
 cd ccs
 ./install.sh
 ```
@@ -29,7 +29,7 @@ cd ccs
 Or as a one-liner:
 
 ```bash
-git clone https://github.com/yourusername/ccs.git && cd ccs && ./install.sh
+git clone https://github.com/kaitranntt/ccs.git && cd ccs && ./install.sh
 ```
 
 ## Configuration
