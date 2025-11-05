@@ -1,0 +1,52 @@
+{
+  "name": "@kai/ccs",
+  "version": "2.4.0",
+  "description": "Claude Code Switch - Instant profile switching between Claude Sonnet 4.5 and GLM 4.6",
+  "keywords": [
+    "cli",
+    "claude",
+    "glm",
+    "ai",
+    "profile",
+    "switch"
+  ],
+  "homepage": "https://github.com/kaitranntt/ccs",
+  "bugs": {
+    "url": "https://github.com/kaitranntt/ccs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaitranntt/ccs.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Tam Nhu Tran (Kai)",
+    "email": "kaitranntt@users.noreply.github.com"
+  },
+  "bin": {
+    "ccs": "bin/ccs.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "config/",
+    "VERSION",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "preferGlobal": true,
+  "scripts": {
+    "test": "bash tests/edge-cases.sh",
+    "prepublishOnly": "node scripts/sync-version.js",
+    "prepack": "node scripts/sync-version.js",
+    "prepare": "node scripts/check-executables.js"
+  }
+}

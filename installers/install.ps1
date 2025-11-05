@@ -20,7 +20,7 @@ $ScriptDir = if ($MyInvocation.MyCommand.Path) {
     $null
 }
 
-$InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\ccs.ps1") -or (Test-Path "$ScriptDir\..\ccs.ps1"))) {
+$InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\lib\ccs.ps1") -or (Test-Path "$ScriptDir\..\lib\ccs.ps1"))) {
     "git"
 } else {
     "standalone"
@@ -30,7 +30,7 @@ $InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\ccs.ps1") -or (Test
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (irm | iex)
 # For git installations, VERSION file is read if available
-$CcsVersion = "2.3.0"
+$CcsVersion = "2.4.0"
 
 # Try to read VERSION file for git installations
 if ($ScriptDir) {
@@ -230,12 +230,12 @@ if ($InstallMethod -eq "standalone") {
     }
 } else {
     # Git install - copy local file
-    $CcsPs1Path = if (Test-Path "$ScriptDir\ccs.ps1") {
-        "$ScriptDir\ccs.ps1"
-    } elseif (Test-Path "$ScriptDir\..\ccs.ps1") {
-        "$ScriptDir\..\ccs.ps1"
+    $CcsPs1Path = if (Test-Path "$ScriptDir\lib\ccs.ps1") {
+        "$ScriptDir\lib\ccs.ps1"
+    } elseif (Test-Path "$ScriptDir\..\lib\ccs.ps1") {
+        "$ScriptDir\..\lib\ccs.ps1"
     } else {
-        throw "ccs.ps1 not found"
+        throw "lib\ccs.ps1 not found"
     }
     Copy-Item $CcsPs1Path "$CcsDir\ccs.ps1" -Force
     Write-Host "|  [OK] Installed ccs.ps1"

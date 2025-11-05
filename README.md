@@ -11,6 +11,7 @@ Switch between Claude Sonnet 4.5 and GLM 4.6 instantly. Stop hitting rate limits
 
 [![License](https://img.shields.io/badge/license-MIT-C15F3C?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=for-the-badge)]()
+[![npm](https://img.shields.io/npm/v/@kai/ccs?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@kai/ccs)
 [![PoweredBy](https://img.shields.io/badge/PoweredBy-ClaudeKit-C15F3C?style=for-the-badge)](https://claudekit.cc?ref=HMNKXOHN)
 
 **Languages**: [English](README.md) | [Tiếng Việt](README.vi.md)
@@ -29,6 +30,17 @@ claude /login
 ```
 
 ### Primary Installation Methods
+
+#### Option 1: npm Package (Recommended)
+
+**macOS / Linux / Windows**
+```bash
+npm install -g @kai/ccs
+```
+
+Compatible with npm, yarn, pnpm, and bun package managers.
+
+#### Option 2: Direct Install (Traditional)
 
 **macOS / Linux**
 ```bash
@@ -53,6 +65,24 @@ ccs glm "Create a simple REST API"
 ccs glm
 ccs "Debug this issue"
 ccs "Write unit tests"
+```
+
+#### Package Manager Options
+
+All major package managers are supported:
+
+```bash
+# npm (default)
+npm install -g @kai/ccs
+
+# yarn
+yarn global add @kai/ccs
+
+# pnpm (70% less disk space)
+pnpm add -g @kai/ccs
+
+# bun (30x faster)
+bun add -g @kai/ccs
 ```
 
 ### Configuration (Auto-created)

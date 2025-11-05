@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 CCS (Claude Code Switch) is a lightweight CLI wrapper enabling instant profile switching between Claude Sonnet 4.5 and GLM 4.6 models. The tool delegates to the official Claude CLI via the `--settings` flag, supporting both Unix-like systems (bash) and Windows (PowerShell).
 
 **Primary Installation Methods** (highest priority):
+- **npm Package** (recommended): `npm install -g @kai/ccs` (cross-platform)
 - macOS/Linux: `curl -fsSL ccs.kaitran.ca/install | bash`
 - Windows: `irm ccs.kaitran.ca/install | iex`
 
@@ -46,11 +47,30 @@ exec claude --settings <path> [args]
 ```
 
 **Key Files**:
-- `ccs` (bash) / `ccs.ps1` (PowerShell): Main executable wrapper
-- `installers/install.sh` / `installers/install.ps1`: Installation scripts
+- `package.json`: npm package manifest with bin field configuration
+- `bin/ccs.js`: Cross-platform Node.js entry point (npm package)
+- `lib/ccs` (bash) / `lib/ccs.ps1` (PowerShell): Platform-specific executable wrappers
+- `installers/install.sh` / `installers/install.ps1`: Traditional installation scripts
 - `installers/uninstall.sh` / `installers/uninstall.ps1`: Removal scripts
 - `VERSION`: Single source of truth for version (format: MAJOR.MINOR.PATCH)
 - `.claude/`: Commands and skills for Claude Code integration
+
+**npm Package Architecture**:
+```
+User: ccs [profile] [claude-args]
+  ↓
+npm creates bin/ccs.js symlink/wrapper
+  ↓
+bin/ccs.js detects platform (Unix vs Windows)
+  ├─ Unix: spawn bash lib/ccs [args]
+  └─ Windows: spawn pwsh/powershell lib/ccs.ps1 [args]
+  ↓
+Read ~/.ccs/config.json
+  ↓
+Lookup profile → settings file path
+  ↓
+exec claude --settings <path> [args]
+```
 
 **Installation Creates**:
 
@@ -103,8 +123,35 @@ cat VERSION
 ./ccs --version
 ./ccs glm --help
 
+# Test npm package locally
+npm pack                    # Creates kai-ccs-X.Y.Z.tgz
+npm install -g kai-ccs-X.Y.Z.tgz  # Test installation
+ccs --version               # Verify it works
+npm uninstall -g @kai/ccs   # Cleanup
+rm kai-ccs-X.Y.Z.tgz        # Remove tarball
+
 # Clean test environment
 rm -rf ~/.ccs
+```
+
+### npm Package Publishing
+```bash
+# First-time setup (one-time)
+npm login                   # Login to npm account
+npm token create --type=granular --scope=publish  # Create token
+# Add NPM_TOKEN to GitHub Secrets
+
+# Publishing workflow
+./scripts/bump-version.sh patch  # Bump version
+git add VERSION package.json lib/ccs lib/ccs.ps1 installers/install.sh installers/install.ps1
+git commit -m "chore: bump version to X.Y.Z"
+git tag vX.Y.Z
+git push origin main
+git push origin vX.Y.Z  # Triggers GitHub Actions publish
+
+# Manual publish (if needed)
+npm publish --dry-run    # Test before publishing
+npm publish --access public  # Publish to npm registry
 ```
 
 ## Code Standards

@@ -21,7 +21,7 @@ fi
 # Detect installation method (git vs standalone)
 # Check if ccs executable exists in SCRIPT_DIR or parent (real git install)
 # Don't just check .git (user might run curl | bash inside their own git repo)
-if [[ -f "$SCRIPT_DIR/ccs" ]] || [[ -f "$SCRIPT_DIR/../ccs" ]]; then
+if [[ -f "$SCRIPT_DIR/lib/ccs" ]] || [[ -f "$SCRIPT_DIR/../lib/ccs" ]]; then
   INSTALL_METHOD="git"
 else
   INSTALL_METHOD="standalone"
@@ -31,7 +31,7 @@ fi
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (curl | bash)
 # For git installations, VERSION file is read if available
-CCS_VERSION="2.3.0"
+CCS_VERSION="2.4.0"
 
 # Try to read VERSION file for git installations
 if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
@@ -410,15 +410,15 @@ if [[ "$INSTALL_METHOD" == "standalone" ]]; then
 else
   # Git install - use local ccs file
   # Handle both running from root or from installers/ subdirectory
-  if [[ -f "$SCRIPT_DIR/ccs" ]]; then
-    chmod +x "$SCRIPT_DIR/ccs"
-    ln -sf "$SCRIPT_DIR/ccs" "$INSTALL_DIR/ccs"
-  elif [[ -f "$SCRIPT_DIR/../ccs" ]]; then
-    chmod +x "$SCRIPT_DIR/../ccs"
-    ln -sf "$SCRIPT_DIR/../ccs" "$INSTALL_DIR/ccs"
+  if [[ -f "$SCRIPT_DIR/lib/ccs" ]]; then
+    chmod +x "$SCRIPT_DIR/lib/ccs"
+    ln -sf "$SCRIPT_DIR/lib/ccs" "$INSTALL_DIR/ccs"
+  elif [[ -f "$SCRIPT_DIR/../lib/ccs" ]]; then
+    chmod +x "$SCRIPT_DIR/../lib/ccs"
+    ln -sf "$SCRIPT_DIR/../lib/ccs" "$INSTALL_DIR/ccs"
   else
     echo "|"
-    echo "[X] Error: ccs executable not found"
+    echo "[X] Error: lib/ccs executable not found"
     exit 1
   fi
   echo "|  [OK] Installed executable"
