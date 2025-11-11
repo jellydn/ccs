@@ -93,7 +93,7 @@ function createConfigFiles() {
     // Migrate from v3.1.1 to v3.2.0 (symlink architecture)
     console.log('');
     try {
-      const SharedManager = require('../bin/shared-manager');
+      const SharedManager = require('../bin/management/shared-manager');
       const sharedManager = new SharedManager();
       sharedManager.migrateFromV311();
       sharedManager.ensureSharedDirectories();

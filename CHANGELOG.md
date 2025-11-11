@@ -2,6 +2,13 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [3.4.4] - 2025-11-11
+
+### Fixed
+- Postinstall symlink creation (fixed require path to shared-manager.js)
+
+---
+
 ## [3.4.3] - 2025-11-11
 
 ### Added
