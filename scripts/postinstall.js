@@ -284,12 +284,7 @@ function createConfigFiles() {
       const kimiSettings = {
         env: {
           ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
-          ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE',
-          ANTHROPIC_MODEL: 'kimi-for-coding',
-          ANTHROPIC_SMALL_FAST_MODEL: 'kimi-for-coding',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-for-coding',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-for-coding',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-for-coding'
+          ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE'
         },
         alwaysThinkingEnabled: true
       };
@@ -307,6 +302,62 @@ function createConfigFiles() {
       console.log('      3. Replace: YOUR_KIMI_API_KEY_HERE');
     } else {
       console.log('[OK] Kimi profile exists: ~/.ccs/kimi.settings.json (preserved)');
+    }
+
+    // Migrate existing Kimi configs to remove deprecated model fields (v4.1.2)
+    // Kimi API changed - model fields now cause 401 errors
+    if (fs.existsSync(kimiSettingsPath)) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(kimiSettingsPath, 'utf8'));
+        let updated = false;
+
+        // Ensure env object exists
+        if (!existing.env) {
+          existing.env = {};
+          updated = true;
+        }
+
+        // Remove deprecated model fields that cause 401 errors
+        const deprecatedFields = [
+          'ANTHROPIC_MODEL',
+          'ANTHROPIC_SMALL_FAST_MODEL',
+          'ANTHROPIC_DEFAULT_OPUS_MODEL',
+          'ANTHROPIC_DEFAULT_SONNET_MODEL',
+          'ANTHROPIC_DEFAULT_HAIKU_MODEL'
+        ];
+
+        for (const field of deprecatedFields) {
+          if (existing.env[field] !== undefined) {
+            delete existing.env[field];
+            updated = true;
+          }
+        }
+
+        // Ensure required fields exist
+        if (!existing.env.ANTHROPIC_BASE_URL) {
+          existing.env.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
+          updated = true;
+        }
+
+        // Add alwaysThinkingEnabled if missing
+        if (existing.alwaysThinkingEnabled === undefined) {
+          existing.alwaysThinkingEnabled = true;
+          updated = true;
+        }
+
+        // Write back if updated
+        if (updated) {
+          const tmpPath = `${kimiSettingsPath}.tmp`;
+          fs.writeFileSync(tmpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+          fs.renameSync(tmpPath, kimiSettingsPath);
+          console.log('[OK] Migrated Kimi config (v4.1.2): removed deprecated model fields');
+          console.log('     Kimi API no longer requires model fields (they cause 401 errors)');
+        }
+      } catch (err) {
+        console.warn('[!] Kimi config migration failed:', err.message);
+        console.warn('    Existing config preserved, but may cause 401 errors');
+        console.warn('    Manually remove ANTHROPIC_MODEL fields from ~/.ccs/kimi.settings.json');
+      }
     }
 
     // Copy shell completion files to ~/.ccs/completions/

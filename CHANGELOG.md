@@ -2,6 +2,37 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.1.2] - 2025-11-16
+
+### Fixed
+- **Kimi API 401 errors** caused by deprecated model fields
+  - Removed `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` from Kimi settings
+  - Kimi API update now rejects requests with these fields (previously optional, now break authentication)
+  - Automatic migration removes deprecated fields from existing `~/.ccs/kimi.settings.json`
+  - Preserves user API keys and custom settings during migration
+  - Updated `config/base-kimi.settings.json` template
+  - Users experiencing 401 errors will be automatically fixed on next install/update
+
+### Changed
+- Kimi settings now minimal: only `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` required
+
+---
+
+## [4.1.1] - 2025-11-16
+
+### Fixed
+- **npm install fails to copy .claude/ directory** to `~/.ccs/.claude/`
+  - Error: "[!] CCS .claude/ directory not found, skipping symlink installation"
+  - Created `bin/utils/claude-dir-installer.js` utility to copy `.claude/` from package
+  - Updated `scripts/postinstall.js` to copy `.claude/` before creating symlinks
+  - Updated `ccs update` command to re-install `.claude/` directory
+  - Supports Node.js 14+ with fallback for versions < 16.7.0
+
+### Added
+- `ClaudeDirInstaller` utility class for managing `.claude/` directory installation
+
+---
+
 ## [4.1.0] - 2025-11-16
 
 ### Added
