@@ -73,6 +73,33 @@ function handleVersionCommand() {
   // Config path
   const configPath = getConfigPath();
   console.log(`  ${colored('Config:', 'cyan')} ${configPath}`);
+
+  // Delegation status
+  const delegationRulesPath = path.join(os.homedir(), '.ccs', 'delegation-rules.json');
+  const delegationEnabled = fs.existsSync(delegationRulesPath);
+
+  if (delegationEnabled) {
+    console.log(`  ${colored('Delegation:', 'cyan')} Enabled`);
+
+    // Check which profiles are delegation-ready
+    const readyProfiles = [];
+    const { DelegationValidator } = require('./utils/delegation-validator');
+
+    for (const profile of ['glm', 'kimi']) {
+      const validation = DelegationValidator.validate(profile);
+      if (validation.valid) {
+        readyProfiles.push(profile);
+      }
+    }
+
+    if (readyProfiles.length > 0) {
+      console.log(`  ${colored('Ready:', 'cyan')} ${readyProfiles.join(', ')}`);
+    } else {
+      console.log(`  ${colored('Ready:', 'cyan')} None (configure profiles first)`);
+    }
+  } else {
+    console.log(`  ${colored('Delegation:', 'cyan')} Not configured`);
+  }
   console.log('');
 
   // Documentation
@@ -121,9 +148,19 @@ function handleHelpCommand() {
   console.log(`  ${colored('ccs personal', 'yellow')}                Switch to personal account`);
   console.log('');
 
+  // Delegation (NEW)
+  console.log(colored('Delegation (Token Optimization):', 'cyan'));
+  console.log(`  ${colored('/ccs:glm "task"', 'yellow')}             Delegate to GLM-4.6 within Claude session`);
+  console.log(`  ${colored('/ccs:kimi "task"', 'yellow')}            Delegate to Kimi for long context`);
+  console.log(`  ${colored('/ccs:create m2', 'yellow')}              Create custom delegation command`);
+  console.log('  Use delegation to save tokens on simple tasks');
+  console.log('  Commands work inside Claude Code sessions only');
+  console.log('');
+
   // Diagnostics
   console.log(colored('Diagnostics:', 'cyan'));
   console.log(`  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`);
+  console.log(`  ${colored('ccs update', 'yellow')}                  Re-install CCS items to ~/.claude/`);
   console.log('');
 
   // Flags
@@ -215,6 +252,16 @@ async function handleDoctorCommand() {
 
   // Exit with error code if unhealthy
   process.exit(doctor.results.isHealthy() ? 0 : 1);
+}
+
+async function handleUpdateCommand() {
+  const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
+  const manager = new ClaudeSymlinkManager();
+
+  console.log('[i] Updating CCS items in ~/.claude/...');
+  manager.update();
+
+  process.exit(0);
 }
 
 // Smart profile detection
@@ -454,11 +501,25 @@ async function main() {
     return;
   }
 
+  // Special case: update command (re-install CCS symlinks)
+  if (firstArg === 'update' || firstArg === '--update') {
+    await handleUpdateCommand();
+    return;
+  }
+
   // Special case: auth command (multi-account management)
   if (firstArg === 'auth') {
     const AuthCommands = require('./auth/auth-commands');
     const authCommands = new AuthCommands();
     await authCommands.route(args.slice(1));
+    return;
+  }
+
+  // Special case: headless delegation (-p flag)
+  if (args.includes('-p') || args.includes('--prompt')) {
+    const DelegationHandler = require('./delegation/delegation-handler');
+    const handler = new DelegationHandler();
+    await handler.route(args);
     return;
   }
 

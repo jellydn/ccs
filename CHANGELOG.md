@@ -2,6 +2,49 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.1.0] - 2025-11-16
+
+### Added
+- **Selective .claude/ directory symlinking** for shared resources across profiles
+- `claude-symlink-manager.js` utility for managing symlinks with Windows fallback
+- Enhanced `ccs doctor` command to verify .claude/ directory health
+- Postinstall script for automatic .claude/ directory setup
+- **Stream-JSON output** for real-time delegation visibility (`--output-format stream-json --verbose`)
+- **Real-time tool tracking** with verbose context (shows file paths, commands, patterns)
+- **Smart slash command detection** (preserves /cook, /plan, /commit in delegated prompts)
+- **Signal handling** (Ctrl+C/Esc kills delegated child processes, prevents orphans)
+- **Comprehensive tool support** (13 Claude Code tools: Bash, Read, Write, Edit, Glob, Grep, NotebookEdit, NotebookRead, SlashCommand, Task, TodoWrite, WebFetch, WebSearch)
+- **Active task display** for TodoWrite (shows current task instead of count)
+- Documentation: Stream-JSON workflow diagrams
+
+### Changed
+- Installers now create selective symlinks (commands/, skills/, agents/) instead of full directory copies
+- Windows support: Falls back to directory copying when symlinks unavailable
+- Profile-specific files (settings.json, sessions/, todolists/, logs/) remain isolated
+- Improved README with symlink architecture documentation
+- **BREAKING**: Delegation now uses stream-json instead of single JSON blob
+- **Time-based limits** replace turn-based limits (10min default timeout vs 20 max-turns)
+- **Graceful termination** with SIGTERM → SIGKILL fallback (2s grace period)
+- Removed `--max-turns` flag (deprecated, use timeout instead)
+- Simplified slash command docs (removed over-prescriptive instructions)
+- Internal tools (TodoWrite, Skill) now show meaningful progress
+
+### Fixed
+- Duplicate .claude/ resources across multiple profiles
+- Installer logic now handles symlink creation during setup
+- Orphaned `claude -p` processes after parent termination
+- Slash commands broken by IMPORTANT safety prefix
+- Slash commands detected as file paths (/home vs /cook)
+- Stream-json requires `--verbose` flag with `-p`
+- Tool output spam (filtered internal tools, show active tasks)
+
+### Removed
+- IMPORTANT safety prefix (broke slash command positioning)
+- Outdated test files (json-output.test.js, max-turns.test.js)
+- TTY detection (now shows progress unless CCS_QUIET=1)
+
+---
+
 ## [3.5.0] - 2025-11-15
 
 ### Added

@@ -61,7 +61,9 @@ class Doctor {
     this.checkClaudeSettings();
     this.checkProfiles();
     this.checkInstances();
+    this.checkDelegation();
     this.checkPermissions();
+    this.checkCcsSymlinks();
 
     this.showReport();
     return this.results;
@@ -269,7 +271,64 @@ class Doctor {
   }
 
   /**
-   * Check 7: File permissions
+   * Check 7: Delegation system
+   */
+  checkDelegation() {
+    process.stdout.write('[?] Checking delegation... ');
+
+    // Check if delegation-rules.json exists
+    const delegationRulesPath = path.join(this.ccsDir, 'delegation-rules.json');
+    const hasDelegationRules = fs.existsSync(delegationRulesPath);
+
+    // Check if delegation commands exist
+    const sharedCommandsDir = path.join(this.ccsDir, 'shared', 'commands', 'ccs');
+    const hasGlmCommand = fs.existsSync(path.join(sharedCommandsDir, 'glm.md'));
+    const hasKimiCommand = fs.existsSync(path.join(sharedCommandsDir, 'kimi.md'));
+    const hasCreateCommand = fs.existsSync(path.join(sharedCommandsDir, 'create.md'));
+
+    if (!hasGlmCommand || !hasKimiCommand || !hasCreateCommand) {
+      console.log(colored('[!]', 'yellow'), '(not installed)');
+      this.results.addCheck(
+        'Delegation',
+        'warning',
+        'Delegation commands not found',
+        'Install with: npm install -g @kaitranntt/ccs --force'
+      );
+      return;
+    }
+
+    // Check profile validity using DelegationValidator
+    const { DelegationValidator } = require('../utils/delegation-validator');
+    const readyProfiles = [];
+
+    for (const profile of ['glm', 'kimi']) {
+      const validation = DelegationValidator.validate(profile);
+      if (validation.valid) {
+        readyProfiles.push(profile);
+      }
+    }
+
+    if (readyProfiles.length === 0) {
+      console.log(colored('[!]', 'yellow'), '(no profiles ready)');
+      this.results.addCheck(
+        'Delegation',
+        'warning',
+        'Delegation installed but no profiles configured',
+        'Configure profiles with valid API keys (not placeholders)'
+      );
+      return;
+    }
+
+    console.log(colored('[OK]', 'green'), `(${readyProfiles.join(', ')} ready)`);
+    this.results.addCheck(
+      'Delegation',
+      'success',
+      `${readyProfiles.length} profile(s) ready: ${readyProfiles.join(', ')}`
+    );
+  }
+
+  /**
+   * Check 8: File permissions
    */
   checkPermissions() {
     process.stdout.write('[?] Checking permissions... ');
@@ -288,6 +347,40 @@ class Doctor {
         'error',
         'Cannot write to ~/.ccs/',
         'Fix: sudo chown -R $USER ~/.ccs ~/.claude && chmod 755 ~/.ccs ~/.claude'
+      );
+    }
+  }
+
+  /**
+   * Check 9: CCS symlinks to ~/.claude/
+   */
+  checkCcsSymlinks() {
+    process.stdout.write('[?] Checking CCS symlinks... ');
+
+    try {
+      const ClaudeSymlinkManager = require('../utils/claude-symlink-manager');
+      const manager = new ClaudeSymlinkManager();
+      const health = manager.checkHealth();
+
+      if (health.healthy) {
+        console.log(colored('[OK]', 'green'));
+        this.results.addCheck('CCS Symlinks', 'success', 'All CCS items properly symlinked');
+      } else {
+        console.log(colored('[!]', 'yellow'));
+        this.results.addCheck(
+          'CCS Symlinks',
+          'warning',
+          health.issues.join(', '),
+          'Run: ccs update'
+        );
+      }
+    } catch (e) {
+      console.log(colored('[!]', 'yellow'));
+      this.results.addCheck(
+        'CCS Symlinks',
+        'warning',
+        'Could not check CCS symlinks: ' + e.message,
+        'Run: ccs update'
       );
     }
   }
