@@ -176,7 +176,17 @@ spawn(claudeCli, ['--settings', settingsPath, ...args]);
 spawn('sh', ['-c', `claude --settings ${settingsPath} ${args.join(' ')}`]);
 ```
 
-### Module Organization Standards
+### Module Organization Standards (v4.3.2)
+
+#### Subsystem Directory Structure
+```
+bin/
+├── auth/                    # Auth system modules
+├── delegation/              # Delegation system modules
+├── glmt/                    # GLMT system modules
+├── management/              # Management system modules
+└── utils/                   # Utility modules
+```
 
 #### Module Dependencies
 ```javascript
@@ -186,9 +196,13 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-// Local modules
-const { error } = require('./helpers');
-const { detectClaudeCli } = require('./claude-detector');
+// Local modules (relative paths from current subsystem)
+const { error } = require('../utils/helpers');
+const { detectClaudeCli } = require('../utils/claude-detector');
+
+// Subsystem-specific modules
+const DelegationHandler = require('./delegation-handler');
+const SessionManager = require('./session-manager');
 ```
 
 #### Exports Pattern
@@ -200,12 +214,237 @@ module.exports = {
   getSettingsPath
 };
 
+// Class exports (delegation, management modules)
+class DelegationHandler {
+  constructor() {
+    // Implementation
+  }
+}
+module.exports = DelegationHandler;
+
 // Avoid exports with mixed responsibilities
 module.exports = {
   getConfigPath,
   someUtilityFunction,
   anotherUnrelatedFunction
 };
+```
+
+#### Subsystem Naming Conventions (v4.x)
+- **handler**: Routing and orchestration (e.g., `delegation-handler.js`)
+- **executor**: Execution logic (e.g., `headless-executor.js`)
+- **manager**: State management (e.g., `session-manager.js`, `instance-manager.js`)
+- **validator**: Validation logic (e.g., `delegation-validator.js`)
+- **formatter**: Output formatting (e.g., `result-formatter.js`)
+- **parser**: Parsing logic (e.g., `settings-parser.js`, `sse-parser.js`)
+
+## Delegation System Patterns (v4.0+)
+
+### Stream-JSON Parsing
+
+#### Tool Extraction Pattern
+```javascript
+// Real-time extraction of tool calls from stream-JSON output
+function parseToolLine(line) {
+  const toolRegex = /\[Tool\]\s+(\w+)\((.*?)\)/;
+  const match = line.match(toolRegex);
+
+  if (match) {
+    const [_, toolName, params] = match;
+    return { toolName, params };
+  }
+
+  return null;
+}
+
+// Usage in stream parser
+childProcess.stdout.on('data', (chunk) => {
+  const lines = chunk.toString().split('\n');
+  for (const line of lines) {
+    const tool = parseToolLine(line);
+    if (tool) {
+      console.log(`  ${formatToolName(tool.toolName)} ${formatParams(tool.params)}`);
+    }
+  }
+});
+```
+
+### Session Management Pattern
+
+#### Session Persistence
+```javascript
+// Save session for continuation
+class SessionManager {
+  saveSession(profile, sessionId, prompt) {
+    const sessionData = {
+      profile,
+      sessionId,
+      timestamp: new Date().toISOString(),
+      prompt
+    };
+
+    const sessionPath = path.join(DELEGATION_SESSIONS_DIR, `${profile}-last.json`);
+    fs.writeFileSync(sessionPath, JSON.stringify(sessionData, null, 2));
+  }
+
+  loadSession(profile) {
+    const sessionPath = path.join(DELEGATION_SESSIONS_DIR, `${profile}-last.json`);
+
+    if (!fs.existsSync(sessionPath)) {
+      return null;
+    }
+
+    return JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+  }
+}
+```
+
+### Headless Execution Pattern
+
+#### Spawning with Stream-JSON
+```javascript
+// Execute Claude CLI in headless mode with stream-JSON output
+function executeHeadless(claudeCli, profile, prompt, sessionId = null) {
+  const args = [
+    '--output-format', 'stream-json',
+    '--verbose',
+    '-p', prompt
+  ];
+
+  if (sessionId) {
+    args.push('--session-id', sessionId);
+  }
+
+  const child = spawn(claudeCli, args, {
+    stdio: ['inherit', 'pipe', 'pipe'],
+    windowsHide: true
+  });
+
+  // Parse stdout for tools
+  child.stdout.on('data', (chunk) => {
+    parseStreamOutput(chunk.toString());
+  });
+
+  // Handle Ctrl+C
+  process.on('SIGINT', () => {
+    child.kill('SIGTERM');
+    process.exit(130);
+  });
+
+  return child;
+}
+```
+
+### Result Formatting Pattern
+
+#### Cost and Duration Extraction
+```javascript
+// Extract cost and duration from Claude CLI output
+function parseExecutionStats(output) {
+  const costRegex = /Cost:\s+\$(\d+\.\d+)/;
+  const durationRegex = /Duration:\s+(\d+)ms/;
+
+  const costMatch = output.match(costRegex);
+  const durationMatch = output.match(durationRegex);
+
+  return {
+    cost: costMatch ? parseFloat(costMatch[1]) : null,
+    duration: durationMatch ? parseInt(durationMatch[1]) : null
+  };
+}
+
+// Format results
+function formatResults(exitCode, stats) {
+  const status = exitCode === 0 ? '[OK]' : '[X]';
+  const costStr = stats.cost ? `\$${stats.cost.toFixed(4)}` : 'N/A';
+  const durationStr = stats.duration ? `${(stats.duration / 1000).toFixed(2)}s` : 'N/A';
+
+  console.log(`\n${status} Execution complete`);
+  console.log(`  Cost: ${costStr}`);
+  console.log(`  Duration: ${durationStr}`);
+}
+```
+
+## Symlinking Patterns (v4.1+)
+
+### Symlink Creation Pattern
+
+#### Cross-Platform Symlinking
+```javascript
+// Create symlink with Windows fallback
+async function createSymlink(source, target) {
+  try {
+    // Try symlink first
+    await fs.promises.symlink(source, target, 'dir');
+    return 'symlink';
+  } catch (error) {
+    if (error.code === 'EPERM' && process.platform === 'win32') {
+      // Windows fallback: copy directory
+      await fs.promises.cp(source, target, { recursive: true });
+      return 'copy';
+    }
+    throw error;
+  }
+}
+```
+
+### Symlink Validation Pattern
+
+#### Integrity Checking
+```javascript
+// Validate symlink integrity
+function validateSymlink(linkPath, expectedTarget) {
+  try {
+    const stats = fs.lstatSync(linkPath);
+
+    if (!stats.isSymbolicLink()) {
+      return { valid: false, reason: 'not_a_symlink' };
+    }
+
+    const actualTarget = fs.readlinkSync(linkPath);
+    const resolvedActual = path.resolve(path.dirname(linkPath), actualTarget);
+    const resolvedExpected = path.resolve(expectedTarget);
+
+    if (resolvedActual !== resolvedExpected) {
+      return { valid: false, reason: 'wrong_target', actualTarget, expectedTarget };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, reason: 'missing', error: error.message };
+  }
+}
+```
+
+### Sync Command Pattern
+
+#### Repairing Broken Symlinks
+```javascript
+// Repair broken symlinks
+function repairSymlinks(instancePath, sharedPath) {
+  const symlinkDirs = ['commands', 'skills', 'agents'];
+  const repaired = [];
+
+  for (const dir of symlinkDirs) {
+    const linkPath = path.join(instancePath, '.claude', dir);
+    const targetPath = path.join(sharedPath, dir);
+
+    const validation = validateSymlink(linkPath, targetPath);
+
+    if (!validation.valid) {
+      // Remove broken symlink/directory
+      if (fs.existsSync(linkPath)) {
+        fs.rmSync(linkPath, { recursive: true, force: true });
+      }
+
+      // Recreate symlink
+      fs.symlinkSync(targetPath, linkPath, 'dir');
+      repaired.push(dir);
+    }
+  }
+
+  return repaired;
+}
 ```
 
 ## Platform Compatibility Standards
@@ -488,10 +727,17 @@ Before releasing new version:
 ## Summary
 
 These code standards ensure the CCS codebase remains:
-- **Maintainable**: Clear structure and consistent patterns
-- **Reliable**: Comprehensive error handling and testing
-- **Performant**: Optimized for speed and memory usage
-- **Secure**: Safe process execution and file handling
-- **Compatible**: Works consistently across all supported platforms
+- **Maintainable**: Clear modular structure with 7 subsystems, consistent naming patterns
+- **Reliable**: Comprehensive error handling, testing, and validation
+- **Performant**: Optimized spawn logic, stream parsing, minimal overhead
+- **Secure**: Safe process execution, symlink validation, file handling
+- **Compatible**: Cross-platform symlinking, Windows fallbacks, unified behavior
+- **Extensible**: Clean subsystem boundaries, reusable patterns
 
-Following these standards helps maintain the quality and simplicity achieved through the recent codebase simplification while enabling future development and maintenance.
+**v4.x Specific Standards**:
+- **Delegation patterns**: Stream-JSON parsing, session management, headless execution
+- **Symlinking patterns**: Cross-platform symlink creation, validation, repair
+- **Subsystem organization**: Clear separation (auth, delegation, glmt, management, utils)
+- **Naming conventions**: handler, executor, manager, validator, formatter, parser suffixes
+
+Following these standards helps maintain the quality, modularity, and extensibility of the v4.x architecture while enabling future development with AI delegation, shared data management, and comprehensive diagnostics.

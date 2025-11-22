@@ -2,9 +2,10 @@
 
 ## Executive Summary
 
-CCS (Claude Code Switch) is a lightweight CLI wrapper that enables instant profile switching between Claude Sonnet 4.5, GLM 4.6, and Kimi for Coding models. The project has undergone two major simplifications:
-- **v2.x**: 35% codebase reduction (from 1,315 to 855 lines)
-- **v3.0**: Additional 40% reduction through vault removal (~600 lines deleted), achieving a login-per-profile model that eliminates credential encryption/decryption overhead
+CCS (Claude Code Switch) is a lightweight CLI wrapper that enables instant profile switching between Claude Sonnet 4.5, GLM 4.6, GLMT (GLM with Thinking), and Kimi for Coding models. The project has evolved through major architectural phases:
+- **v2.x**: Vault-based credential encryption (~1,700 LOC)
+- **v3.0**: 40% reduction through vault removal (~1,100 LOC), login-per-profile model
+- **v4.0-4.3.2**: AI-powered delegation system, selective .claude/ symlinking, stream-JSON output (~8,477 LOC including delegation infrastructure)
 
 ## Product Vision
 
@@ -75,6 +76,47 @@ Provide developers with instant, zero-downtime switching between AI models, opti
   - Provide suggestions for resolving common problems
   - Maintain consistent error message format
 
+#### FR-007: AI-Powered Delegation System
+**Requirement**: System shall enable headless AI task delegation with real-time tool tracking
+- **Priority**: High
+- **Acceptance Criteria**:
+  - Execute Claude CLI in headless mode with `-p` flag
+  - Parse stream-JSON output for real-time tool visibility
+  - Track 13+ Claude Code tools (Bash, Read, Write, Edit, Glob, Grep, etc.)
+  - Support session continuation (`:continue` suffix)
+  - Display cost and duration statistics
+  - Handle Ctrl+C signal properly (kill child processes)
+
+#### FR-008: .claude/ Directory Symlinking
+**Requirement**: System shall selectively symlink .claude/ directories for data sharing
+- **Priority**: Medium
+- **Acceptance Criteria**:
+  - Symlink shared data: commands/, skills/, agents/
+  - Keep profile-specific data isolated: settings.json, sessions/, todolists/, logs/
+  - Windows fallback to directory copying when symlinks unavailable
+  - Non-invasive installation (never modify ~/.claude/settings.json)
+  - Idempotent installation (safe to run multiple times)
+
+#### FR-009: Shell Completion
+**Requirement**: System shall provide comprehensive shell completion across 4 shells
+- **Priority**: Low
+- **Acceptance Criteria**:
+  - Support Bash, Zsh, Fish, PowerShell
+  - Color-coded categories (profiles, commands, flags)
+  - Profile-aware completions (glm, glmt, kimi, work, personal)
+  - Easy installation via `--shell-completion` flag
+  - Show installation instructions per shell
+
+#### FR-010: Diagnostics and Maintenance
+**Requirement**: System shall provide comprehensive health diagnostics
+- **Priority**: Medium
+- **Acceptance Criteria**:
+  - `ccs doctor`: Validate installation, profiles, symlinks, API keys
+  - `ccs sync`: Fix broken symlinks and directory structure
+  - `ccs update`: Check for newer versions with smart notifications
+  - Color-coded status indicators ([OK], [!], [X])
+  - Actionable recommendations for issues
+
 ### Non-Functional Requirements
 
 #### NFR-001: Performance
@@ -126,26 +168,25 @@ Provide developers with instant, zero-downtime switching between AI models, opti
 
 ### System Components
 
-#### Core Modules (v3.0)
-1. **Main Entry Point** (`bin/ccs.js`): Command parsing, profile routing, unified execution
-2. **Configuration Manager** (`bin/config-manager.js`): Settings-based profile management (glm, kimi)
-3. **Claude Detector** (`bin/claude-detector.js`): CLI executable detection
-4. **Helpers** (`bin/helpers.js`): Utility functions and error handling
-5. **Instance Manager** (`bin/instance-manager.js`): Isolated instance directory management
-6. **Profile Detector** (`bin/profile-detector.js`): Profile type routing (settings vs account)
-7. **Profile Registry** (`bin/profile-registry.js`): Account profile metadata management
-8. **Auth Commands** (`bin/auth-commands.js`): Multi-account command handlers
+#### Core Subsystems (v4.3.2)
+1. **Main Entry Point** (`bin/ccs.js` ~800 lines): Command parsing, profile routing, delegation detection
+2. **Auth System** (`bin/auth/` ~800 lines): Multi-account management (create, list, delete, switch)
+3. **Delegation System** (`bin/delegation/` ~1,200 lines): AI-powered task delegation with stream-JSON
+4. **GLMT System** (`bin/glmt/` ~700 lines): Thinking mode proxy and transformation
+5. **Management System** (`bin/management/` ~600 lines): Config, instance, profile, shared data management
+6. **Utilities** (`bin/utils/` ~1,500 lines): Symlink manager, validators, update checker, completion
+7. **.claude/ Integration** (`~/.ccs/shared/`): Symlinked commands, skills, agents directories
 
-#### v3.0 Simplification Achievements
-- **Vault removal**: Deleted vault-manager.js, credential-reader.js, credential-switcher-macos.js (~600 lines)
-- **Login-per-profile**: Users login directly in isolated instances (no credential copying)
-- **Auto-directory creation**: Missing instance directories created automatically
-- **Platform parity**: macOS/Linux/Windows all use same `CLAUDE_CONFIG_DIR` approach
-- **Simplified schema**: Profile metadata reduced to 3 fields (type, created, last_used)
+#### v4.0-4.3.2 Major Enhancements
+- **AI Delegation** (v4.0): Headless execution with stream-JSON output, session continuation
+- **Selective Symlinking** (v4.1): Share .claude/ directories (commands, skills, agents)
+- **Shell Completion** (v4.1.4): 4 shells supported with color-coded categories
+- **Diagnostics** (v4.2): Doctor, sync, update commands for health checks
+- **Stream-JSON Parser** (v4.3): Real-time tool tracking during delegation
 
-### Data Flow (v3.0 Simplified)
+### Data Flow (v4.3.2)
 
-**Settings-based profiles (glm, kimi)**:
+**Settings-based profiles (glm, kimi, glmt)**:
 ```mermaid
 graph LR
     USER[ccs glm "task"] --> PARSE[Parse Args]
@@ -153,6 +194,16 @@ graph LR
     DETECT --> CONFIG[Read config.json]
     CONFIG --> EXEC[execClaude with --settings]
     EXEC --> CLAUDE[Claude CLI]
+```
+
+**Delegation execution (v4.0+)**:
+```mermaid
+graph LR
+    USER[ccs glm -p "task"] --> DELEGATE[DelegationHandler]
+    DELEGATE --> HEADLESS[HeadlessExecutor]
+    HEADLESS --> STREAM[Parse stream-JSON]
+    STREAM --> FORMAT[ResultFormatter]
+    FORMAT --> SESSION[SessionManager save]
 ```
 
 **Account-based profiles (work, personal)**:
@@ -165,21 +216,31 @@ graph LR
     EXEC --> CLAUDE[Claude CLI reads from instance]
 ```
 
-**v3.0 Flow Simplification**:
-- **v2.x**: Login → Encrypt → Store in vault → Decrypt on use → Copy to instance → Execute (6 steps)
-- **v3.0**: Create instance → Login in instance → Execute (3 steps, 50% reduction)
+**Evolution Flow Comparison**:
+- **v2.x**: Login → Encrypt → Store → Decrypt → Copy → Execute (6 steps)
+- **v3.0**: Create instance → Login → Execute (3 steps, 50% reduction)
+- **v4.x**: Add delegation routing → Stream-JSON parsing → Session persistence (extended capabilities)
 
-### Configuration Architecture (v3.0)
+### Configuration Architecture (v4.3.2)
 
 **Settings-based Config** (`~/.ccs/config.json`):
 ```json
 {
   "profiles": {
     "glm": "~/.ccs/glm.settings.json",
+    "glmt": "~/.ccs/glmt.settings.json",
     "kimi": "~/.ccs/kimi.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
+```
+
+**Shared Data Architecture** (v4.1+):
+```
+~/.ccs/shared/              # Symlinked to instance .claude/ directories
+├── commands/               # Slash commands (shared across profiles)
+├── skills/                 # Agent skills (shared across profiles)
+└── agents/                 # Agent configs (shared across profiles)
 ```
 
 **Account Profile Registry** (`~/.ccs/profiles.json`):
@@ -202,13 +263,17 @@ graph LR
 - **Kept fields**: `type`, `created`, `last_used` (essential metadata only)
 - **Rationale**: Credentials live in instance directories, no vault needed
 
-**Instance Directory Structure**:
+**Instance Directory Structure** (v4.1+ with symlinking):
 ```
 ~/.ccs/instances/work/
-├── session-env/           # Claude sessions
-├── todos/                 # Per-profile todos
-├── logs/                  # Execution logs
-├── file-history/          # File edits
+├── .claude/
+│   ├── commands@ → ~/.ccs/shared/commands/   # Symlink (v4.1+)
+│   ├── skills@ → ~/.ccs/shared/skills/       # Symlink (v4.1+)
+│   ├── agents@ → ~/.ccs/shared/agents/       # Symlink (v4.1+)
+│   ├── settings.json                          # Profile-specific (isolated)
+│   ├── sessions/                              # Profile-specific (isolated)
+│   ├── todolists/                             # Profile-specific (isolated)
+│   └── logs/                                  # Profile-specific (isolated)
 ├── .anthropic/            # SDK config
 └── .credentials.json      # Login credentials (managed by Claude CLI)
 ```
@@ -275,21 +340,26 @@ graph LR
 
 ## Success Metrics
 
-### v3.0 Achievement Metrics
-- **Code Reduction**: 600 lines deleted (40% from v2.x codebase)
-- **Execution Simplification**: 6 steps → 3 steps (50% reduction)
-- **Performance Improvement**: No encryption/decryption overhead (50-100ms saved per activation)
-- **Platform Parity**: Unified behavior across macOS/Linux/Windows
+### v4.3.2 Achievement Metrics
+- **Delegation System**: AI-powered task execution with stream-JSON output
+- **Tool Tracking**: 13+ Claude Code tools supported
+- **Session Persistence**: `:continue` support for follow-up tasks
+- **Shell Completion**: 4 shells supported (Bash, Zsh, Fish, PowerShell)
+- **Diagnostics**: Doctor, sync, update commands for health checks
+- **Symlinking**: Selective .claude/ directory sharing (commands, skills, agents)
 
 ### Adoption Metrics
 - **Download Count**: npm package downloads per month
 - **Installation Success Rate**: >95% successful installations
 - **User Retention**: Monthly active users
 - **Platform Distribution**: Usage across supported platforms
+- **Delegation Usage**: Percentage of users utilizing `-p` flag
+- **API Key Configuration**: Rate of users configuring GLM/Kimi/GLMT keys
 
-### Performance Metrics (v3.0)
+### Performance Metrics (v4.3.2)
 - **Profile Creation**: ~5-10ms (instance directory creation only)
 - **Profile Activation**: ~5-10ms (no decryption overhead)
+- **Delegation Startup**: <500ms (stream-JSON initialization)
 - **Response Time**: Minimal overhead, direct Claude CLI execution
 - **Error Rate**: <0.1% in normal operations
 - **Reliability**: 99.9% uptime during normal operations
@@ -320,31 +390,26 @@ graph LR
 
 ## Future Roadmap
 
-### Completed (v3.0)
-- ✅ **Vault Removal**: Eliminated credential encryption/decryption complexity
-- ✅ **Login-Per-Profile**: Users login directly in isolated instances
-- ✅ **Platform Parity**: macOS/Linux/Windows unified behavior
-- ✅ **Command Simplification**: `auth create` replaces `auth save`
-- ✅ **Auto-Directory Creation**: Missing instance directories created automatically
+See [docs/project-roadmap.md](./project-roadmap.md) for detailed version history and future plans.
 
-### Short-term (3-6 months)
-- **Migration Guide**: Comprehensive v2.x → v3.0 migration documentation
-- **Enhanced Delegation**: Improved `/ccs` command integration
-- **Better Error Messages**: More actionable error reporting for v3.0
-- **Testing Coverage**: Expand platform-specific test suites
+### Completed (v4.3.2)
+- ✅ **AI Delegation System** (v4.0): Headless execution with stream-JSON
+- ✅ **Selective Symlinking** (v4.1): Share .claude/ directories
+- ✅ **Shell Completion** (v4.1.4): 4 shells with color-coded categories
+- ✅ **Diagnostics** (v4.2): Doctor, sync, update commands
+- ✅ **Session Continuation** (v4.3): `:continue` support
+- ✅ **Vault Removal** (v3.0): Login-per-profile model
+- ✅ **Platform Parity** (v3.0): Unified macOS/Linux/Windows behavior
 
-### Medium-term (6-12 months)
-- **Plugin System**: Support for custom model integrations
-- **Configuration UI**: Optional graphical configuration tool
-- **Advanced Analytics**: Usage statistics and optimization suggestions
-- **Team Features**: Shared profiles and configurations
-- **Instance Cleanup**: Automatic session/log rotation policies
+### Active Development (v4.4-v4.5)
+- **Delegation Improvements**: MCP tool integration, SQLite session storage
+- **Performance Optimization**: Model selection based on task complexity
+- **Enhanced Diagnostics**: Automated troubleshooting recommendations
 
-### Long-term (12+ months)
-- **AI-Powered Optimization**: Intelligent model selection
-- **Cloud Integration**: Cloud-based configuration synchronization
-- **Enterprise Features**: Corporate deployment and management
-- **Ecosystem Expansion**: Integration with other AI tools
+### Future Considerations (v5.0+)
+- **AI-Powered Features**: Automatic task classification, intelligent model selection
+- **Enterprise Features**: Team profile sharing, usage analytics dashboard
+- **Ecosystem Expansion**: Plugin system for custom models, CI/CD integration
 
 ## Compliance and Legal
 
@@ -365,34 +430,34 @@ graph LR
 
 ## Conclusion
 
-The CCS project demonstrates successful iterative simplification achieving substantial code reduction while maintaining and enhancing functionality:
+The CCS project demonstrates successful iterative evolution balancing simplification with enhanced capabilities:
 
 ### Evolution Summary
-- **v2.x**: 35% reduction (1,315 → 855 lines) through consolidated spawn logic and removed security theater
-- **v3.0**: Additional 40% reduction (~600 lines deleted) through vault removal and login-per-profile model
-- **Net Result**: ~60% total reduction from original codebase with enhanced features
+- **v2.x**: Vault-based credential encryption (~1,700 LOC)
+- **v3.0**: Vault removal, login-per-profile (~1,100 LOC, 40% reduction)
+- **v4.0-4.3.2**: AI delegation, .claude/ symlinking, stream-JSON (~8,477 LOC with enhanced features)
 
-### v3.0 Architectural Benefits
-1. **Eliminated Complexity**: No credential encryption/decryption (vault-manager, credential-reader deleted)
-2. **Faster Execution**: 50-100ms overhead removed (PBKDF2 key derivation eliminated)
-3. **Simpler Mental Model**: Users understand "login per profile" vs abstract "credential vault"
-4. **Platform Parity**: macOS/Linux/Windows use identical `CLAUDE_CONFIG_DIR` approach
-5. **Easier Debugging**: Credentials visible in instance directory (standard Claude CLI location)
+### v4.3.2 Architectural Benefits
+1. **AI-Powered Delegation**: Headless execution with real-time tool tracking
+2. **Selective Symlinking**: Shared .claude/ data (commands, skills, agents) across profiles
+3. **Enhanced Diagnostics**: Doctor, sync, update commands for health checks
+4. **Stream-JSON Parsing**: Real-time visibility into Claude Code tool usage
+5. **Session Persistence**: Continue delegation sessions with `:continue` suffix
+6. **Shell Completion**: 4 shells supported with color-coded categories
+7. **Platform Parity**: Unified behavior across macOS/Linux/Windows
 
-### Key Strengths (v3.0)
-- **Login-Per-Profile Model**: Intuitive, matches Claude CLI behavior
-- **Auto-Directory Creation**: Missing instance dirs created automatically
-- **Minimal Schema**: Only 3 fields (type, created, last_used)
-- **Cross-Platform Compatibility**: Unified behavior across all platforms
-- **Developer Experience**: Familiar Claude CLI interface, enhanced with profiles
-- **Maintainability**: Fewer files, simpler logic, easier testing
-- **Performance**: Direct instance execution, no encryption overhead
+### Key Strengths (v4.3.2)
+- **Modular Architecture**: Clear subsystem separation (auth, delegation, glmt, management, utils)
+- **Non-Invasive Installation**: Never modifies ~/.claude/settings.json
+- **Idempotent Operations**: Safe to run installation/sync multiple times
+- **Cross-Platform Compatibility**: Unified behavior, Windows symlink fallback
+- **Developer Experience**: Familiar Claude CLI interface with AI delegation
+- **Maintainability**: Modular design, clear responsibilities
+- **Performance**: Minimal overhead, direct CLI execution
 
-### Breaking Changes (v2.x → v3.0)
-- **Command Renamed**: `ccs auth save` → `ccs auth create`
-- **Profile Creation Flow**: Now prompts for login interactively
-- **Removed Commands**: `auth current`, `auth cleanup` (no longer relevant)
-- **Schema Change**: `vault`, `subscription`, `email` fields removed
-- **Migration Required**: Users must recreate profiles with v3.0
+### Breaking Changes (v3.x → v4.x)
+- **Zero Breaking Changes**: v4.x fully backward compatible with v3.x
+- **New Features**: Delegation, symlinking, diagnostics added without breaking existing workflows
+- **Migration**: No migration required from v3.x to v4.x
 
-The project is well-positioned for future growth with a solid, simplified architectural foundation, comprehensive testing, and clear development standards. The v3.0 login-per-profile model provides a sustainable basis for continued enhancement while maintaining core principles of simplicity, reliability, and performance.
+The project is well-positioned for future growth with a solid architectural foundation, comprehensive AI delegation capabilities, and enhanced developer experience. The v4.x architecture provides a sustainable basis for continued enhancement while maintaining core principles of simplicity, reliability, and performance.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-CCS (Claude Code Switch) is a lightweight CLI wrapper that provides instant profile switching between Claude Sonnet 4.5 and GLM 4.6 models. Current version **v3.3.0** features GLMT thinking mode with embedded proxy architecture, debug logging, and refined configuration management.
+CCS (Claude Code Switch) is a lightweight CLI wrapper that provides instant profile switching between Claude Sonnet 4.5, GLM 4.6, GLMT (GLM with Thinking), and Kimi for Coding models. Current version **v4.3.2** features AI-powered delegation system, selective .claude/ directory symlinking, stream-JSON output, shell completion (4 shells), and comprehensive diagnostics (doctor, sync, update commands).
 
 ## Core Architecture Principles
 
@@ -17,19 +17,29 @@ CCS (Claude Code Switch) is a lightweight CLI wrapper that provides instant prof
 - Simplify error handling and messaging
 - Maintain cross-platform compatibility
 
-## High-Level Architecture
+## High-Level Architecture (v4.3.2)
 
 ```mermaid
+%%{init: {'theme': 'dark'}}%%
 graph TB
     subgraph "User Interface Layer"
         CLI[Command Line Interface]
         FLAGS[Special Flag Handlers]
+        DELEGATION[Delegation Flag]
     end
 
     subgraph "Core Processing Layer"
         DETECT[Profile Detection Logic]
         CONFIG[Configuration Manager]
         SPAWN[Unified Spawn Executor]
+        DELEGATOR[Delegation Handler]
+    end
+
+    subgraph "New v4.x Subsystems"
+        SYMLINK[Symlink Manager]
+        DOCTOR[Diagnostics]
+        COMPLETION[Shell Completion]
+        SESSION[Session Manager]
     end
 
     subgraph "System Integration Layer"
@@ -41,35 +51,41 @@ graph TB
     subgraph "External Dependencies"
         CLAUDE_EXEC[Claude CLI Executable]
         SETTINGS[Claude Settings Files]
+        SHARED[~/.ccs/shared/]
     end
 
     CLI --> DETECT
+    CLI --> DELEGATION
     FLAGS --> SPAWN
+    DELEGATION --> DELEGATOR
     DETECT --> CONFIG
     CONFIG --> SPAWN
+    DELEGATOR --> SPAWN
     SPAWN --> CLAUDE
     CLAUDE --> PATH
     CLAUDE --> ENV
     SPAWN --> CLAUDE_EXEC
     CONFIG --> SETTINGS
+    SYMLINK --> SHARED
 ```
 
 ## Component Architecture
 
-### 1. Main Entry Point (`bin/ccs.js`)
+### 1. Main Entry Point (`bin/ccs.js` - ~800 lines)
 
 **Role**: Central orchestrator for all CCS operations
 
 **Key Responsibilities**:
 - Argument parsing and profile detection
-- Special command handling (--version, --help, auth, doctor) [--install/--uninstall WIP]
+- Special command handling (--version, --help, --shell-completion, auth, doctor, sync, update)
+- Delegation detection (`-p` / `--prompt` flag routing)
 - Profile type routing (settings-based vs account-based)
 - GLMT proxy lifecycle management
 - Unified process execution through `execClaude()`
 - Error propagation and exit code management
 - Auto-recovery for missing configuration
 
-**Architecture with GLMT Support (v3.3.0)**:
+**Architecture with Delegation Support (v4.3.2)**:
 ```mermaid
 graph TD
     subgraph "Entry Point"
@@ -261,6 +277,236 @@ graph TD
   "default": "work"
 }
 ```
+## Delegation Architecture (v4.0+)
+
+### Overview
+
+The delegation system enables headless execution of Claude CLI with real-time tool tracking. Users invoke with `-p` flag for AI-powered task delegation.
+
+### Components
+
+**1. Delegation Handler (`bin/delegation/delegation-handler.js` - ~300 lines)**
+- Routes `-p` commands to appropriate profile
+- Validates profile has valid API key
+- Detects `:continue` suffix for session resumption
+- Delegates to HeadlessExecutor for execution
+
+**2. Headless Executor (`bin/delegation/headless-executor.js` - ~400 lines)**
+- Spawns Claude CLI with `--output-format stream-json --verbose`
+- Parses stream-JSON output in real-time
+- Tracks 13+ Claude Code tools (Bash, Read, Write, Edit, Glob, Grep, etc.)
+- Handles Ctrl+C signal (kills child processes properly)
+- Extracts cost and duration from output
+
+**3. Session Manager (`bin/delegation/session-manager.js` - ~200 lines)**
+- Saves session IDs for continuation support
+- Loads last session for `:continue` commands
+- Manages session history in `~/.ccs/delegation-sessions/`
+
+**4. Result Formatter (`bin/delegation/result-formatter.js` - ~150 lines)**
+- Formats execution results with cost, duration, exit code
+- Color-codes tool names and paths
+- Displays summary statistics
+
+**5. Settings Parser (`bin/delegation/settings-parser.js` - ~150 lines)**
+- Parses profile settings to extract API keys
+- Validates settings file format
+- Supports both settings-based and account-based profiles
+
+### Delegation Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Handler as DelegationHandler
+    participant Executor as HeadlessExecutor
+    participant Parser as Stream Parser
+    participant Session as SessionManager
+    participant Formatter as ResultFormatter
+    participant Claude as Claude CLI
+
+    User->>Handler: ccs glm -p "add tests"
+    Handler->>Handler: Validate profile, check API key
+    Handler->>Executor: Execute with stream-JSON
+    Executor->>Claude: spawn --output-format stream-json --verbose
+    Claude->>Parser: stdout stream
+    Parser->>Parser: Extract [Tool] lines
+    Parser->>User: Display tools in real-time
+    Claude->>Executor: Exit with code
+    Executor->>Session: Save session ID
+    Executor->>Formatter: Format results
+    Formatter->>User: Display cost, duration, status
+```
+
+### Stream-JSON Parsing
+
+**Tool Tracking**:
+```javascript
+// Real-time extraction of tool calls from stream-JSON
+const toolRegex = /\[Tool\]\s+(\w+)\((.*?)\)/;
+const match = line.match(toolRegex);
+if (match) {
+  const [_, toolName, params] = match;
+  console.log(`  ${formatToolName(toolName)} ${formatParams(params)}`);
+}
+```
+
+**Supported Tools** (13+):
+- Bash, BashOutput, KillShell
+- Read, Write, Edit, MultiEdit, NotebookEdit
+- Glob, Grep
+- WebFetch, WebSearch
+- SlashCommand, Skill, TodoWrite
+
+### Session Continuation
+
+**Usage**:
+```bash
+# Initial delegation
+ccs glm -p "add tests"
+# Session saved to ~/.ccs/delegation-sessions/glm-last.json
+
+# Continue session
+ccs glm:continue -p "run the tests"
+# Loads session ID, continues conversation
+```
+
+**Session Storage** (`~/.ccs/delegation-sessions/`):
+```json
+{
+  "profile": "glm",
+  "sessionId": "2a3b4c5d",
+  "timestamp": "2025-11-21T10:00:00.000Z",
+  "prompt": "add tests"
+}
+```
+
+## .claude/ Symlinking Architecture (v4.1+)
+
+### Overview
+
+CCS selectively symlinks .claude/ directories to share data (commands, skills, agents) across profiles while keeping profile-specific data isolated (settings, sessions, logs).
+
+### Components
+
+**1. Claude Directory Installer (`bin/utils/claude-dir-installer.js` - ~300 lines)**
+- Creates `~/.ccs/shared/` directory structure
+- Installs shared directories: commands/, skills/, agents/
+- Non-invasive: never modifies `~/.claude/settings.json`
+- Idempotent: safe to run multiple times
+
+**2. Claude Symlink Manager (`bin/utils/claude-symlink-manager.js` - ~400 lines)**
+- Creates symlinks from instance .claude/ to `~/.ccs/shared/`
+- Windows fallback: copies directories if symlinks unavailable
+- Validates symlink integrity
+- Repairs broken symlinks via `ccs sync`
+
+### Symlinking Strategy
+
+**Symlinked (Shared)**:
+- `~/.ccs/instances/work/.claude/commands/` → `~/.ccs/shared/commands/`
+- `~/.ccs/instances/work/.claude/skills/` → `~/.ccs/shared/skills/`
+- `~/.ccs/instances/work/.claude/agents/` → `~/.ccs/shared/agents/`
+
+**Isolated (Profile-Specific)**:
+- `~/.ccs/instances/work/.claude/settings.json`
+- `~/.ccs/instances/work/.claude/sessions/`
+- `~/.ccs/instances/work/.claude/todolists/`
+- `~/.ccs/instances/work/.claude/logs/`
+
+### Directory Structure
+
+```
+~/.ccs/
+├── shared/                    # Shared across all profiles (v4.1+)
+│   ├── commands/              # Slash commands
+│   ├── skills/                # Agent skills
+│   └── agents/                # Agent configs
+└── instances/
+    ├── work/
+    │   └── .claude/
+    │       ├── commands@ → ~/.ccs/shared/commands/   # Symlink
+    │       ├── skills@ → ~/.ccs/shared/skills/       # Symlink
+    │       ├── agents@ → ~/.ccs/shared/agents/       # Symlink
+    │       ├── settings.json                          # Isolated
+    │       ├── sessions/                              # Isolated
+    │       └── logs/                                  # Isolated
+    └── personal/
+        └── .claude/
+            ├── commands@ → ~/.ccs/shared/commands/
+            ├── skills@ → ~/.ccs/shared/skills/
+            ├── agents@ → ~/.ccs/shared/agents/
+            ├── settings.json
+            ├── sessions/
+            └── logs/
+```
+
+### Windows Fallback
+
+When symlinks unavailable on Windows:
+1. Copy directories instead of symlinking
+2. `ccs sync` updates copies from `~/.ccs/shared/`
+3. Less efficient but maintains functionality
+
+## Shell Completion Architecture (v4.1.4+)
+
+### Overview
+
+CCS provides comprehensive shell completion for 4 shells (Bash, Zsh, Fish, PowerShell) with color-coded categories and profile-aware completions.
+
+### Components
+
+**1. Completion Generator (`bin/utils/shell-completion.js` - ~500 lines)**
+- Generates completion scripts for each shell
+- Color-codes categories: profiles (blue), commands (green), flags (yellow)
+- Profile-aware: reads `config.json` and `profiles.json` dynamically
+- Easy installation via `ccs --shell-completion <shell>`
+
+### Supported Shells
+
+| Shell | Completion File | Location |
+|-------|----------------|----------|
+| Bash | `ccs-completion.bash` | `~/.bashrc` |
+| Zsh | `_ccs` | `~/.zshrc` or fpath |
+| Fish | `ccs.fish` | `~/.config/fish/completions/` |
+| PowerShell | `ccs-completion.ps1` | PowerShell profile |
+
+### Color-Coded Categories
+
+**Profiles** (Blue):
+- glm, glmt, kimi (settings-based)
+- work, personal (account-based)
+
+**Commands** (Green):
+- auth, doctor, sync, update
+
+**Flags** (Yellow):
+- --version, --help, --shell-completion, -p
+
+## Diagnostics Architecture (v4.2+)
+
+### Overview
+
+CCS provides comprehensive health diagnostics and maintenance commands.
+
+### Components
+
+**1. Doctor Command (`bin/management/doctor.js` - ~300 lines)**
+- Validates installation
+- Checks profiles and API keys
+- Verifies symlink integrity
+- Displays color-coded status ([OK], [!], [X])
+
+**2. Sync Command (`bin/management/sync.js` - ~200 lines)**
+- Repairs broken symlinks
+- Fixes directory structure
+- Updates shared data
+
+**3. Update Checker (`bin/utils/update-checker.js` - ~150 lines)**
+- Checks for newer CCS versions
+- Smart notifications (once per day)
+- Displays upgrade instructions
+
 ## GLMT Architecture (v3.2.0+)
 
 ### Overview
@@ -487,49 +733,76 @@ sequenceDiagram
 │   ├── {timestamp}-request-openai.json
 │   ├── {timestamp}-response-openai.json
 │   └── {timestamp}-response-anthropic.json
-├── shared/                  # Shared across all profiles (v3.1+)
+├── delegation-sessions/     # Delegation session persistence (v4.0+)
+│   ├── glm-last.json
+│   ├── kimi-last.json
+│   └── work-last.json
+├── shared/                  # Shared across all profiles (v4.1+)
 │   ├── commands/            # Slash commands
 │   ├── skills/              # Agent skills
 │   └── agents/              # Agent configs
-├── accounts/                # Encrypted credential vaults
-│   ├── .salt                # Key derivation salt
-│   ├── work.json.enc        # Work account credentials (encrypted)
-│   └── personal.json.enc    # Personal account credentials (encrypted)
 └── instances/               # Isolated Claude instances
     ├── work/                # Work account instance
-    │   ├── session-env/
-    │   ├── todos/
-    │   ├── logs/
-    │   ├── commands@ → shared/commands/
-    │   ├── skills@ → shared/skills/
-    │   ├── agents@ → shared/agents/
-    │   ├── .credentials.json
-    │   └── ...
+    │   ├── .claude/
+    │   │   ├── commands@ → ~/.ccs/shared/commands/   # Symlink (v4.1+)
+    │   │   ├── skills@ → ~/.ccs/shared/skills/       # Symlink (v4.1+)
+    │   │   ├── agents@ → ~/.ccs/shared/agents/       # Symlink (v4.1+)
+    │   │   ├── settings.json                          # Profile-specific
+    │   │   ├── sessions/                              # Profile-specific
+    │   │   ├── todolists/                             # Profile-specific
+    │   │   └── logs/                                  # Profile-specific
+    │   ├── .anthropic/
+    │   └── .credentials.json
     └── personal/            # Personal account instance
-        ├── session-env/
-        ├── todos/
-        └── ...
+        ├── .claude/
+        │   ├── commands@ → ~/.ccs/shared/commands/
+        │   ├── skills@ → ~/.ccs/shared/skills/
+        │   ├── agents@ → ~/.ccs/shared/agents/
+        │   ├── settings.json
+        │   ├── sessions/
+        │   └── logs/
+        ├── .anthropic/
+        └── .credentials.json
 
-bin/                         # CCS source files
-├── ccs.js                   # Main entry point (v3.3.0)
-├── glmt-proxy.js            # Embedded HTTP proxy (v3.2.0+)
-├── glmt-transformer.js      # Format conversion (v3.2.0+, control mechanisms v3.6)
-├── locale-enforcer.js       # Force English output (v3.6)
-├── budget-calculator.js     # Thinking budget control (v3.6)
-├── task-classifier.js       # Task classification (v3.6)
-├── delta-accumulator.js     # Streaming state + loop detection (v3.6)
-├── sse-parser.js            # SSE stream parser (v3.4+)
-├── config-manager.js        # Configuration handling
-├── claude-detector.js       # Claude CLI detection
-├── instance-manager.js      # Instance orchestration
-├── shared-manager.js        # Shared data symlinks (v3.1+)
-├── profile-detector.js      # Profile type detection
-├── profile-registry.js      # Account profile metadata
-├── helpers.js               # Utility functions
-├── error-manager.js         # Error handling
-├── recovery-manager.js      # Auto-recovery
-├── auth-commands.js         # Multi-account management
-└── doctor.js                # Health check diagnostics
+bin/                         # CCS source files (v4.3.2)
+├── ccs.js                   # Main entry point (~800 lines)
+├── auth/                    # Auth system (~800 lines)
+│   ├── auth-create.js
+│   ├── auth-delete.js
+│   ├── auth-list.js
+│   └── auth-switch.js
+├── delegation/              # Delegation system (~1,200 lines)
+│   ├── delegation-handler.js
+│   ├── headless-executor.js
+│   ├── session-manager.js
+│   ├── result-formatter.js
+│   └── settings-parser.js
+├── glmt/                    # GLMT system (~700 lines)
+│   ├── glmt-proxy.js
+│   ├── glmt-transformer.js
+│   ├── locale-enforcer.js
+│   ├── reasoning-enforcer.js
+│   ├── sse-parser.js
+│   └── delta-accumulator.js
+├── management/              # Management system (~600 lines)
+│   ├── config-manager.js
+│   ├── instance-manager.js
+│   ├── profile-detector.js
+│   ├── profile-registry.js
+│   ├── shared-manager.js
+│   ├── doctor.js
+│   ├── sync.js
+│   └── recovery-manager.js
+├── utils/                   # Utilities (~1,500 lines)
+│   ├── claude-detector.js
+│   ├── claude-dir-installer.js
+│   ├── claude-symlink-manager.js
+│   ├── delegation-validator.js
+│   ├── shell-completion.js
+│   ├── update-checker.js
+│   ├── helpers.js
+│   └── error-manager.js
+└── ...
 
 config/
 └── base-glmt.settings.json  # GLMT template (v3.3.0)
@@ -849,36 +1122,41 @@ The architecture provides clean extension points:
 
 ## Summary
 
-The CCS system architecture successfully balances simplicity with functionality:
+The CCS system architecture successfully balances simplicity with enhanced functionality:
 
+**Core Architecture Strengths**:
+- **Modular Design**: Clear subsystem separation (auth, delegation, glmt, management, utils)
 - **Unified spawn logic** eliminates code duplication
-- **Dual-path execution** supports both settings-based (backward compatible) and account-based (concurrent sessions) profiles
-- **Lazy instance initialization** follows YAGNI principle (only create when needed)
-- **Encrypted credential vaults** with AES-256-GCM provide secure multi-account storage
+- **Dual-path execution** supports settings-based and account-based profiles
 - **Isolated Claude instances** enable concurrent sessions via CLAUDE_CONFIG_DIR
 - **Cross-platform compatibility** ensures consistent behavior everywhere
-- **Performance optimization** achieves 35% code reduction with identical functionality
 - **Clean separation of concerns** makes the codebase maintainable and extensible
 
-**v3.3.0 Features**:
+**v4.3.2 Features** (Current):
+- **AI Delegation System**: Headless execution with stream-JSON output, real-time tool tracking
+- **Selective Symlinking**: Share .claude/ directories (commands, skills, agents) across profiles
+- **Shell Completion**: 4 shells supported (Bash, Zsh, Fish, PowerShell) with color-coded categories
+- **Diagnostics**: Doctor, sync, update commands for health checks
+- **Session Persistence**: `:continue` support for follow-up delegation tasks
+- **13+ Claude Code Tools**: Bash, Read, Write, Edit, Glob, Grep, TodoWrite, etc.
+
+**v3.3.0 Features** (GLMT):
 - **GLMT thinking mode**: Embedded proxy for GLM reasoning support
 - **Debug logging**: File-based logging to `~/.ccs/logs/` when `CCS_DEBUG_LOG=1`
 - **Verbose mode**: Console logging with `--verbose` flag
-- **Configuration migration**: Auto-upgrade v3.2.0 configs with new fields
+- **Configuration migration**: Auto-upgrade configs with new fields
 - **Enhanced settings**: Temperature, max tokens, thinking controls, API timeout
-- **Transformation validation**: Self-test request/response conversions
 
-**v3.2.0 Enhancements**:
-- Concurrent sessions for account-based profiles
-- Profile type detection and routing (settings vs account)
-- Instance isolation with credential synchronization
-- Backward compatibility maintained for all existing profiles
+**v4.3.2 Architecture Highlights**:
+1. **Delegation Architecture**: Stream-JSON parsing, session management, result formatting
+2. **Symlinking Architecture**: Selective sharing with Windows fallback
+3. **Shell Completion**: Dynamic profile-aware completions with color-coding
+4. **Diagnostics Infrastructure**: Doctor validation, sync repairs, update checking
+5. **Modular Subsystems**: 7 clear subsystems (~8,477 LOC total)
 
-**v3.3.0 Architecture Highlights**:
-1. **Proxy Architecture**: Buffered mode with 120s timeout, random port binding
-2. **Debug Infrastructure**: Dual logging (console + file) with timestamp tracking
-3. **Config Management**: Automatic migration, string-only env vars, PowerShell compatibility
-4. **Thinking Mode**: Control tags, reasoning parameters, signature generation
-5. **Error Recovery**: Timeout handling, fallback options, clear error messages
+**Evolution Path**:
+- **v2.x → v3.0**: 40% reduction through vault removal, login-per-profile model
+- **v3.0 → v4.x**: Enhanced capabilities with delegation, symlinking, diagnostics (zero breaking changes)
+- **Future (v5.0+)**: AI-powered features, enterprise capabilities, ecosystem expansion
 
-The architecture demonstrates how thoughtful design can add sophisticated features (thinking mode, debug infrastructure, multi-account management) while maintaining simplicity, security, and backward compatibility.
+The architecture demonstrates how thoughtful design can add sophisticated AI delegation capabilities, shared data management, and comprehensive diagnostics while maintaining simplicity, backward compatibility, and cross-platform support.
