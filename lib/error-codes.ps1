@@ -36,7 +36,8 @@ $script:E_INVALID_STATE = "E901"
 # Get error documentation URL
 function Get-ErrorDocUrl {
     param([string]$ErrorCode)
-    return "https://github.com/kaitranntt/ccs/blob/main/docs/errors/README.md#$($ErrorCode.ToLower())"
+    $LowerCode = $ErrorCode.ToLower()
+    return "https://github.com/kaitranntt/ccs/blob/main/docs/errors/README.md#$LowerCode"
 }
 
 # Get error category from code

@@ -567,7 +567,7 @@ function Register-Profile {
     })
 
     # Note: No longer auto-set as default
-    # Users must explicitly run: ccs auth default <profile>
+    # Users must explicitly run: ccs auth default [profile]
     # Default always stays on implicit 'default' profile (uses ~/.claude/)
 
     Write-ProfilesJson $Data
@@ -816,13 +816,15 @@ function Ensure-Instance {
 # --- Profile Detection Logic (Phase 1) ---
 
 function Get-AllProfileNames {
-    $names = @()
+    $names = [System.Collections.ArrayList]::new()
 
     # Settings-based profiles
     if (Test-Path $ConfigFile) {
         try {
             $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
-            $names += $Config.profiles.PSObject.Properties.Name
+            $Config.profiles.PSObject.Properties.Name | ForEach-Object {
+                [void]$names.Add($_)
+            }
         } catch {}
     }
 
@@ -830,11 +832,13 @@ function Get-AllProfileNames {
     if (Test-Path $ProfilesJson) {
         try {
             $Profiles = Read-ProfilesJson
-            $names += $Profiles.profiles.PSObject.Properties.Name
+            $Profiles.profiles.PSObject.Properties.Name | ForEach-Object {
+                [void]$names.Add($_)
+            }
         } catch {}
     }
 
-    return $names
+    return $names.ToArray()
 }
 
 function Get-AvailableProfiles {
@@ -847,9 +851,9 @@ function Get-AvailableProfiles {
             $SettingsProfiles = $Config.profiles.PSObject.Properties.Name
 
             if ($SettingsProfiles.Count -gt 0) {
-                $lines += "Settings-based profiles (GLM, Kimi, etc.):"
+                $lines += "Settings-based profiles (GLM, Kimi, etc):"
                 foreach ($name in $SettingsProfiles) {
-                    $lines += "  - $name"
+                    $lines += "  * $name"
                 }
             }
         } catch {}
@@ -865,16 +869,16 @@ function Get-AvailableProfiles {
                 $lines += "Account-based profiles:"
                 foreach ($name in $AccountProfiles) {
                     $IsDefault = if ($name -eq $Profiles.default) { " [DEFAULT]" } else { "" }
-                    $lines += "  - $name$IsDefault"
+                    $lines += "  * $name$IsDefault"
                 }
             }
         } catch {}
     }
 
     if ($lines.Count -eq 0) {
-        return "  (no profiles configured)`n  Run `"ccs auth create <profile>`" to create your first account profile."
+        return @("  (no profiles configured)", "  Run 'ccs auth create [profile]' to create your first account profile.")
     } else {
-        return $lines -join "`n"
+        return $lines
     }
 }
 
@@ -1027,7 +1031,8 @@ function Sync-Run {
             Write-Host "[OK] Installed $($Item.Target)" -ForegroundColor Green
             $Installed++
         } catch {
-            Write-Host "[X] Failed to install $($Item.Target): $($_.Exception.Message)" -ForegroundColor Red
+            $ErrorMsg = "[X] Failed to install $($Item.Target): $($_.Exception.Message)"
+            Write-Host $ErrorMsg -ForegroundColor Red
             if ($_.Exception.Message -match "privilege") {
                 Write-Host "[i] Run PowerShell as Administrator or enable Developer Mode" -ForegroundColor Yellow
             }
@@ -1186,14 +1191,14 @@ function Show-AuthHelp {
     Write-Host "CCS Concurrent Account Management" -ForegroundColor White
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Cyan
-    Write-Host "  ccs auth <command> [options]" -ForegroundColor Yellow
+    Write-Host "  ccs auth [command] [options]" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Commands:" -ForegroundColor Cyan
-    Write-Host "  create <profile>        Create new profile and login" -ForegroundColor Yellow
+    Write-Host "  create [profile]        Create new profile and login" -ForegroundColor Yellow
     Write-Host "  list                   List all saved profiles" -ForegroundColor Yellow
-    Write-Host "  show <profile>         Show profile details" -ForegroundColor Yellow
-    Write-Host "  remove <profile>       Remove saved profile" -ForegroundColor Yellow
-    Write-Host "  default <profile>      Set default profile" -ForegroundColor Yellow
+    Write-Host "  show [profile]         Show profile details" -ForegroundColor Yellow
+    Write-Host "  remove [profile]       Remove saved profile" -ForegroundColor Yellow
+    Write-Host "  default [profile]      Set default profile" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Cyan
     Write-Host "  ccs auth create work                     # Create & login to work profile" -ForegroundColor Yellow
@@ -1213,7 +1218,7 @@ function Show-AuthHelp {
     Write-Host "ccs" -ForegroundColor Yellow -NoNewline
     Write-Host " uses Claude CLI defaults from ~/.claude/"
     Write-Host "  Use " -NoNewline
-    Write-Host "ccs auth default <profile>" -ForegroundColor Yellow -NoNewline
+    Write-Host "ccs auth default [profile]" -ForegroundColor Yellow -NoNewline
     Write-Host " to change the default profile."
     Write-Host ""
 }
@@ -1236,7 +1241,7 @@ function Invoke-AuthCreate {
     }
 
     if (-not $ProfileName) {
-        Write-ErrorMsg "Profile name is required`n`nUsage: ccs auth create <profile> [--force]"
+        Write-ErrorMsg "Profile name is required`n`nUsage: ccs auth create [profile] [--force]"
         return 1
     }
 
@@ -1296,7 +1301,7 @@ function Invoke-AuthList {
         Write-Host "No account profiles found" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "To create your first profile:"
-        Write-Host "  ccs auth create <profile>" -ForegroundColor Yellow
+        Write-Host "  ccs auth create [profile]" -ForegroundColor Yellow
         return
     }
 
@@ -1395,7 +1400,7 @@ function Invoke-AuthShow {
         Write-ErrorMsg "Profile name is required"
         Write-Host ""
         Write-Host "Usage: " -NoNewline
-        Write-Host "ccs auth show <profile> [--json]" -ForegroundColor Yellow
+        Write-Host "ccs auth show [profile] [--json]" -ForegroundColor Yellow
         return 1
     }
 
@@ -1473,7 +1478,7 @@ function Invoke-AuthRemove {
         Write-ErrorMsg "Profile name is required"
         Write-Host ""
         Write-Host "Usage: " -NoNewline
-        Write-Host "ccs auth remove <profile> [--yes]" -ForegroundColor Yellow
+        Write-Host "ccs auth remove [profile] [--yes]" -ForegroundColor Yellow
         return 1
     }
 
@@ -1527,7 +1532,7 @@ function Invoke-AuthDefault {
     $ProfileName = $Args[0]
 
     if (-not $ProfileName) {
-        Write-ErrorMsg "Profile name is required`nUsage: ccs auth default <profile>"
+        Write-ErrorMsg "Profile name is required`nUsage: ccs auth default [profile]"
         return 1
     }
 
@@ -1703,35 +1708,42 @@ if ($Profile -notmatch '^[a-zA-Z0-9_-]+$') {
 $ProfileInfo = Get-ProfileType $Profile
 
 if ($ProfileInfo.Type -eq "error") {
-    # Get suggestions using fuzzy matching
-    $AllProfiles = Get-AllProfileNames
-    $Suggestions = Find-SimilarStrings -Target $Profile -Candidates $AllProfiles
-
     Write-Host ""
     Write-Host "[X] Profile '$Profile' not found" -ForegroundColor Red
     Write-Host ""
 
-    # Show suggestions if any
-    if ($Suggestions -and $Suggestions.Count -gt 0) {
-        Write-Host "Did you mean:" -ForegroundColor Yellow
-        foreach ($suggestion in $Suggestions) {
-            Write-Host "  $suggestion"
+    # Get suggestions using fuzzy matching (only if profiles exist)
+    $AllProfiles = Get-AllProfileNames
+    if ($AllProfiles -and $AllProfiles.Count -gt 0) {
+        $Suggestions = Find-SimilarStrings -Target $Profile -Candidates $AllProfiles
+
+        # Show suggestions if any
+        if ($Suggestions -and $Suggestions.Count -gt 0) {
+            Write-Host "Did you mean:" -ForegroundColor Yellow
+            foreach ($suggestion in $Suggestions) {
+                Write-Host "  $suggestion"
+            }
+            Write-Host ""
         }
-        Write-Host ""
     }
 
     Write-Host "Available profiles:" -ForegroundColor Cyan
-    Get-AvailableProfiles | ForEach-Object { Write-Host $_ }
+    $AvailableProfiles = Get-AvailableProfiles
+    foreach ($line in $AvailableProfiles) {
+        Write-Host $line
+    }
     Write-Host ""
     Write-Host "Solutions:" -ForegroundColor Yellow
     Write-Host "  # Use existing profile"
-    Write-Host "  ccs <profile> `"your prompt`""
+    Write-Host "  ccs [profile] 'your prompt'"
     Write-Host ""
     Write-Host "  # Create new account profile"
-    Write-Host "  ccs auth create <name>"
+    Write-Host "  ccs auth create [name]"
     Write-Host ""
-    Write-Host "Error: $script:E_PROFILE_NOT_FOUND" -ForegroundColor Yellow
-    Write-Host (Get-ErrorDocUrl $script:E_PROFILE_NOT_FOUND) -ForegroundColor Yellow
+    $ErrorCode = $script:E_PROFILE_NOT_FOUND
+    Write-Host "Error: $ErrorCode" -ForegroundColor Yellow
+    $ErrorUrl = Get-ErrorDocUrl $ErrorCode
+    Write-Host $ErrorUrl -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }

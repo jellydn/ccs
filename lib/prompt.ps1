@@ -77,9 +77,9 @@ function Read-Input {
 
     # Interactive prompt
     $PromptText = if ($Default) {
-        "$Message [$Default]: "
+        "${Message} [$Default]: "
     } else {
-        "$Message: "
+        "${Message}: "
     }
 
     while ($true) {
