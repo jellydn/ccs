@@ -758,6 +758,13 @@ class Doctor {
       healthy: this.results.isHealthy()
     }, null, 2);
   }
+
+  /**
+   * Check if the health check results are healthy
+   */
+  isHealthy(): boolean {
+    return this.results.isHealthy();
+  }
 }
 
 export default Doctor;
