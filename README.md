@@ -374,7 +374,23 @@ graph LR
 
 ## Architecture
 
+CCS resolves profiles in priority order:
+1. **CLIProxy profiles** (gemini, codex, agy) - OAuth-based, zero config
+2. **Settings-based profiles** (glm, kimi) - API key required
+3. **Account-based profiles** (work, personal) - Isolated Claude instances
+4. **Default** - Claude CLI with subscription
+
 ### Profile Types
+
+**CLIProxy**: gemini, codex, agy (v5.0+)
+- OAuth-based authentication via [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
+- Browser auth on first run, tokens cached in `~/.ccs/cliproxy/auth/<provider>/`
+- Proxy runs on port 8317, auto-spawned per session
+- Binary: `~/.ccs/cliproxy/bin/cli-proxy-api` (~15MB, auto-downloaded)
+- Model mappings:
+  - **Gemini**: gemini-2.5-pro (opus), gemini-2.0-flash (sonnet), flash-lite (haiku)
+  - **Codex**: gpt-5.1-codex-max (opus), gpt-4o (sonnet), gpt-4o-mini (haiku)
+  - **Antigravity**: agy-pro (sonnet), agy-turbo (haiku)
 
 **Settings-based**: GLM, GLMT, Kimi, default
 - Uses `--settings` flag pointing to config files
@@ -396,6 +412,7 @@ graph LR
 - sessions/ - Conversation history
 - todolists/ - Todo lists
 - logs/ - Execution logs
+- **cliproxy/auth/** - OAuth tokens (CLIProxy profiles only)
 
 > [!NOTE]
 > **v4.4 Breaking Change**: settings.json now shared across profiles. Previously each profile had isolated settings. Migration is automatic on install using ~/.claude/settings.json as the authoritative source. Backups created: `<instance>/settings.json.pre-shared-migration`
