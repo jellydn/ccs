@@ -70,6 +70,73 @@ irm ccs.kaitran.ca/install | iex
 
 <br>
 
+## Zero-Config OAuth Providers
+
+**New in v5.0.0**: Instant access to premium models with zero API key setup. Browser-based OAuth authentication.
+
+> Powered by [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) - the universal API proxy for AI models.
+
+| Provider | Default Model | Opus | Haiku | Example |
+|:---------|:--------------|:-----|:------|:--------|
+| **Gemini** | gemini-2.5-pro | gemini-2.5-pro | gemini-2.5-flash | `ccs gemini "explain code"` |
+| **Codex** | gpt-5.1-codex-max | gpt-5.1-codex-max-high | gpt-5.1-codex-mini-high | `ccs codex "implement API"` |
+| **Antigravity** | gemini-3-pro-preview | gemini-3-pro-preview | gemini-2.5-flash | `ccs agy "review architecture"` |
+
+**First Run**: Browser opens for authentication. Tokens cached in `~/.ccs/cliproxy/auth/<provider>/`.
+
+**Subsequent Runs**: Instant - no re-auth needed until token expires.
+
+### Authentication Commands
+
+```bash
+# Interactive OAuth (default) - browser opens, complete auth
+ccs gemini
+
+# Authenticate only (save tokens, don't start session)
+ccs gemini --auth
+ccs codex --auth
+
+# Headless mode (for SSH/servers without browser)
+ccs agy --headless       # Displays URL, paste in browser elsewhere
+
+# Logout (clear tokens)
+ccs gemini --logout
+```
+
+### OAuth vs API Key Models
+
+| Feature | OAuth Providers<br>(gemini, codex, agy) | API Key Models<br>(glm, kimi) |
+|:--------|:----------------------------------------|:------------------------------|
+| **Setup** | Browser auth on first run | Edit settings.json, add API key |
+| **Token Storage** | `~/.ccs/cliproxy/auth/<provider>/` | `~/.ccs/*.settings.json` |
+| **Renewal** | Automatic (OAuth refresh tokens) | Manual (update key when expired) |
+| **Binary** | Auto-downloads CLIProxyAPI (~15MB) | No additional binaries |
+| **Port** | 8317 (configurable) | N/A |
+| **Best For** | Quick testing, no key management | Production, explicit key control |
+
+### Troubleshooting OAuth
+
+**OAuth timeout (2min limit)**:
+```bash
+# If browser doesn't load in time:
+ccs gemini --auth --headless   # Get URL manually
+```
+
+**Port 8317 conflict**:
+```bash
+ccs doctor                      # Check port availability
+# Error: "Port 8317 in use"
+lsof -ti:8317 | xargs kill      # Unix: kill process using port
+```
+
+**Binary download failures**:
+```bash
+ccs doctor                      # Shows binary status + version
+# Manual download: https://github.com/router-for-me/CLIProxyAPI/releases
+```
+
+<br>
+
 ### Configuration (Auto-created)
 
 **CCS automatically creates configuration during installation** (via npm postinstall script).
