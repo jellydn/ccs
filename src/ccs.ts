@@ -295,8 +295,10 @@ async function main(): Promise<void> {
     const profileInfo = detector.detectProfileType(profile);
 
     if (profileInfo.type === 'cliproxy') {
-      // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy)
-      await execClaudeWithCLIProxy(claudeCli, profileInfo.name as CLIProxyProvider, remainingArgs);
+      // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy) or user-defined variants
+      const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
+      const customSettingsPath = profileInfo.settingsPath; // undefined for hardcoded profiles
+      await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, { customSettingsPath });
     } else if (profileInfo.type === 'settings') {
       // Check if this is GLMT profile (requires proxy)
       if (profileInfo.name === 'glmt') {

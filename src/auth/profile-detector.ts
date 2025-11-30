@@ -23,6 +23,8 @@ export interface ProfileDetectionResult {
   settingsPath?: string;
   profile?: Settings | ProfileMetadata;
   message?: string;
+  /** For cliproxy variants: the underlying provider (gemini, codex, agy) */
+  provider?: CLIProxyProfileName;
 }
 
 export interface AllProfiles {
@@ -85,6 +87,12 @@ class ProfileDetector {
 
   /**
    * Detect profile type and return routing information
+   *
+   * Priority order:
+   * 0. Hardcoded CLIProxy profiles (gemini, codex, agy)
+   * 1. User-defined CLIProxy variants (config.cliproxy section)
+   * 2. Settings-based profiles (config.profiles section)
+   * 3. Account-based profiles (profiles.json)
    */
   detectProfileType(profileName: string | null | undefined): ProfileDetectionResult {
     // Special case: 'default' means use default profile
@@ -97,12 +105,24 @@ class ProfileDetector {
       return {
         type: 'cliproxy',
         name: profileName,
+        provider: profileName as CLIProxyProfileName,
       };
     }
 
-    // Priority 1: Check settings-based profiles (glm, kimi) - BACKWARD COMPATIBILITY
+    // Priority 1: Check user-defined CLIProxy variants (config.cliproxy section)
     const config = this.readConfig();
 
+    if (config.cliproxy && config.cliproxy[profileName]) {
+      const variant = config.cliproxy[profileName];
+      return {
+        type: 'cliproxy',
+        name: profileName,
+        provider: variant.provider as CLIProxyProfileName,
+        settingsPath: variant.settings,
+      };
+    }
+
+    // Priority 2: Check settings-based profiles (glm, kimi) - BACKWARD COMPATIBILITY
     if (config.profiles && config.profiles[profileName]) {
       return {
         type: 'settings',
@@ -111,7 +131,7 @@ class ProfileDetector {
       };
     }
 
-    // Priority 2: Check account-based profiles (work, personal)
+    // Priority 3: Check account-based profiles (work, personal)
     const profiles = this.readProfiles();
 
     if (profiles.profiles && profiles.profiles[profileName]) {
@@ -124,7 +144,12 @@ class ProfileDetector {
 
     // Not found - generate suggestions
     const allProfiles = this.getAllProfiles();
-    const allProfileNames = [...allProfiles.settings, ...allProfiles.accounts];
+    const allProfileNames = [
+      ...allProfiles.cliproxy,
+      ...allProfiles.cliproxyVariants,
+      ...allProfiles.settings,
+      ...allProfiles.accounts,
+    ];
     const suggestions = findSimilarStrings(profileName, allProfileNames);
 
     const error = new Error(`Profile not found: ${profileName}`) as ProfileNotFoundError;
@@ -180,8 +205,20 @@ class ProfileDetector {
       lines.push(`  - ${name}`);
     });
 
-    // Settings-based profiles
+    // CLIProxy variants (user-defined)
     const config = this.readConfig();
+    const cliproxyVariants = Object.keys(config.cliproxy || {});
+
+    const cliproxyConfig = config.cliproxy;
+    if (cliproxyVariants.length > 0 && cliproxyConfig) {
+      lines.push('CLIProxy variants (user-defined):');
+      cliproxyVariants.forEach((name) => {
+        const variant = cliproxyConfig[name];
+        lines.push(`  - ${name} (${variant.provider})`);
+      });
+    }
+
+    // Settings-based profiles
     const settingsProfiles = Object.keys(config.profiles || {});
 
     if (settingsProfiles.length > 0) {
@@ -221,7 +258,7 @@ class ProfileDetector {
   /**
    * Get all available profile names
    */
-  getAllProfiles(): AllProfiles & { cliproxy: string[] } {
+  getAllProfiles(): AllProfiles & { cliproxy: string[]; cliproxyVariants: string[] } {
     const config = this.readConfig();
     const profiles = this.readProfiles();
 
@@ -229,6 +266,7 @@ class ProfileDetector {
       settings: Object.keys(config.profiles || {}),
       accounts: Object.keys(profiles.profiles || {}),
       cliproxy: [...CLIPROXY_PROFILES],
+      cliproxyVariants: Object.keys(config.cliproxy || {}),
       default: profiles.default,
     };
   }

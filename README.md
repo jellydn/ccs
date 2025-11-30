@@ -376,9 +376,10 @@ graph LR
 
 CCS resolves profiles in priority order:
 1. **CLIProxy profiles** (gemini, codex, agy) - OAuth-based, zero config
-2. **Settings-based profiles** (glm, kimi) - API key required
-3. **Account-based profiles** (work, personal) - Isolated Claude instances
-4. **Default** - Claude CLI with subscription
+2. **CLIProxy variants** (user-defined) - Custom model settings for CLIProxy providers
+3. **Settings-based profiles** (glm, kimi) - API key required
+4. **Account-based profiles** (work, personal) - Isolated Claude instances
+5. **Default** - Claude CLI with subscription
 
 ### Profile Types
 
@@ -391,6 +392,24 @@ CCS resolves profiles in priority order:
   - **Gemini**: gemini-2.5-pro (opus), gemini-2.0-flash (sonnet), flash-lite (haiku)
   - **Codex**: gpt-5.1-codex-max (opus), gpt-4o (sonnet), gpt-4o-mini (haiku)
   - **Antigravity**: agy-pro (sonnet), agy-turbo (haiku)
+
+**CLIProxy Variants** (v5.0.2+)
+- User-defined profile names that route through CLIProxy providers
+- Allows multiple model configurations per provider (e.g., `flash` and `pro` for Gemini)
+- Configure in `~/.ccs/config.json` under `cliproxy` section:
+
+```json
+{
+  "profiles": { ... },
+  "cliproxy": {
+    "flash": { "provider": "gemini", "settings": "~/.ccs/gemini-flash.settings.json" },
+    "pro": { "provider": "gemini", "settings": "~/.ccs/gemini-pro.settings.json" },
+    "gpt": { "provider": "codex", "settings": "~/.ccs/codex-gpt.settings.json" }
+  }
+}
+```
+
+Usage: `ccs flash "quick task"` or `ccs pro "complex analysis"`
 
 **Settings-based**: GLM, GLMT, Kimi, default
 - Uses `--settings` flag pointing to config files

@@ -68,6 +68,8 @@ bun run test         # Build + run all tests
 
 ### Profile Mechanisms
 
+**CLIProxy**: gemini, codex, agy → OAuth-based, zero config
+**CLIProxy Variants**: user-defined profiles in `config.cliproxy` section → custom settings for CLIProxy providers
 **Settings-based**: `--settings` flag → GLM, GLMT, Kimi, default
 **Account-based**: `CLAUDE_CONFIG_DIR` → isolated Claude Sub instances
 

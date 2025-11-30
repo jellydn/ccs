@@ -211,16 +211,40 @@ export function getClaudeEnvVars(
  * Get effective environment variables for provider
  *
  * Priority order:
- * 1. User settings file (~/.ccs/{provider}.settings.json) if exists
- * 2. Bundled defaults from PROVIDER_CONFIGS
+ * 1. Custom settings path (for user-defined CLIProxy variants)
+ * 2. User settings file (~/.ccs/{provider}.settings.json) if exists
+ * 3. Bundled defaults from PROVIDER_CONFIGS
  *
  * This allows users to customize model mappings without code changes.
  * User takes full responsibility for custom settings.
  */
 export function getEffectiveEnvVars(
   provider: CLIProxyProvider,
-  port: number = CLIPROXY_DEFAULT_PORT
+  port: number = CLIPROXY_DEFAULT_PORT,
+  customSettingsPath?: string
 ): NodeJS.ProcessEnv {
+  // Priority 1: Custom settings path (for user-defined variants)
+  if (customSettingsPath) {
+    const expandedPath = customSettingsPath.replace(/^~/, require('os').homedir());
+    if (fs.existsSync(expandedPath)) {
+      try {
+        const content = fs.readFileSync(expandedPath, 'utf-8');
+        const settings: ProviderSettings = JSON.parse(content);
+
+        if (settings.env && typeof settings.env === 'object') {
+          // Custom variant settings found - use them
+          return settings.env;
+        }
+      } catch {
+        // Invalid JSON - fall through to provider defaults
+        console.warn(`[!] Warning: Invalid settings file: ${customSettingsPath}`);
+      }
+    } else {
+      console.warn(`[!] Warning: Settings file not found: ${customSettingsPath}`);
+    }
+  }
+
+  // Priority 2: Default provider settings file
   const settingsPath = getProviderSettingsPath(provider);
 
   // Check for user override file

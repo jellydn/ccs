@@ -218,8 +218,8 @@ export async function execClaudeWithCLIProxy(
   }
 
   // 7. Execute Claude CLI with proxied environment
-  // Uses user settings if ~/.ccs/{provider}.settings.json exists, else bundled defaults
-  const envVars = getEffectiveEnvVars(provider, cfg.port);
+  // Uses custom settings path (for variants), user settings, or bundled defaults
+  const envVars = getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath);
   const env = { ...process.env, ...envVars };
 
   log(`Claude env: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);

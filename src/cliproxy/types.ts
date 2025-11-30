@@ -150,6 +150,8 @@ export interface ExecutorConfig {
   verbose: boolean;
   /** Poll interval for port check in ms (default: 100) */
   pollInterval: number;
+  /** Custom settings path for user-defined CLIProxy variants */
+  customSettingsPath?: string;
 }
 
 /**
