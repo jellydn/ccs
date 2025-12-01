@@ -1,3 +1,15 @@
+# [5.1.0](https://github.com/kaitranntt/ccs/compare/v5.0.2...v5.1.0) (2025-12-01)
+
+
+### Bug Fixes
+
+* **ci:** use pat token to bypass branch protection ([04af7e7](https://github.com/kaitranntt/ccs/commit/04af7e7c09edbc4207f332e7a613d92df1f2fea1))
+
+
+### Features
+
+* **release:** implement semantic versioning automation with conventional commits ([d3d9637](https://github.com/kaitranntt/ccs/commit/d3d96371def7b5b44d6133ad50d86c934cdf1ad4))
+
 # Changelog
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
