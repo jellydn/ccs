@@ -253,10 +253,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Special case: profile command
-  if (firstArg === 'profile') {
-    const { handleProfileCommand } = await import('./commands/profile-command');
-    await handleProfileCommand(args.slice(1));
+  // Special case: api command (manages API profiles)
+  if (firstArg === 'api') {
+    const { handleApiCommand } = await import('./commands/api-command');
+    await handleApiCommand(args.slice(1));
     return;
   }
 

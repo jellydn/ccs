@@ -1,8 +1,8 @@
 /**
- * Profile Command Handler
+ * API Command Handler
  *
- * Manages CCS profiles for custom API providers.
- * Commands: create, list
+ * Manages CCS API profiles for custom API providers.
+ * Commands: create, list, remove
  */
 
 import * as fs from 'fs';
@@ -23,7 +23,7 @@ import {
 import { InteractivePrompt } from '../utils/prompt';
 import { getCcsDir, getConfigPath, loadConfig } from '../utils/config-manager';
 
-interface ProfileCommandArgs {
+interface ApiCommandArgs {
   name?: string;
   baseUrl?: string;
   apiKey?: string;
@@ -33,10 +33,10 @@ interface ProfileCommandArgs {
 }
 
 /**
- * Parse command line arguments for profile commands
+ * Parse command line arguments for api commands
  */
-function parseArgs(args: string[]): ProfileCommandArgs {
-  const result: ProfileCommandArgs = {};
+function parseArgs(args: string[]): ApiCommandArgs {
+  const result: ApiCommandArgs = {};
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -60,20 +60,20 @@ function parseArgs(args: string[]): ProfileCommandArgs {
 }
 
 /**
- * Validate profile name
+ * Validate API profile name
  */
-function validateProfileName(name: string): string | null {
+function validateApiName(name: string): string | null {
   if (!name) {
-    return 'Profile name is required';
+    return 'API name is required';
   }
   if (!/^[a-zA-Z][a-zA-Z0-9._-]*$/.test(name)) {
-    return 'Profile name must start with letter, contain only letters, numbers, dot, dash, underscore';
+    return 'API name must start with letter, contain only letters, numbers, dot, dash, underscore';
   }
   if (name.length > 32) {
-    return 'Profile name must be 32 characters or less';
+    return 'API name must be 32 characters or less';
   }
   // Reserved names
-  const reserved = ['default', 'auth', 'profile', 'doctor', 'sync', 'update', 'help', 'version'];
+  const reserved = ['default', 'auth', 'api', 'doctor', 'sync', 'update', 'help', 'version'];
   if (reserved.includes(name.toLowerCase())) {
     return `'${name}' is a reserved name`;
   }
@@ -96,9 +96,9 @@ function validateUrl(url: string): string | null {
 }
 
 /**
- * Check if profile already exists in config.json
+ * Check if API profile already exists in config.json
  */
-function profileExists(name: string): boolean {
+function apiExists(name: string): boolean {
   try {
     const config = loadConfig();
     return name in config.profiles;
@@ -108,7 +108,7 @@ function profileExists(name: string): boolean {
 }
 
 /**
- * Create settings.json file for profile
+ * Create settings.json file for API profile
  */
 function createSettingsFile(name: string, baseUrl: string, apiKey: string, model: string): string {
   const ccsDir = getCcsDir();
@@ -127,7 +127,7 @@ function createSettingsFile(name: string, baseUrl: string, apiKey: string, model
 }
 
 /**
- * Update config.json with new profile
+ * Update config.json with new API profile
  */
 function updateConfig(name: string, _settingsPath: string): void {
   const configPath = getConfigPath();
@@ -157,7 +157,7 @@ function updateConfig(name: string, _settingsPath: string): void {
 }
 
 /**
- * Handle 'ccs profile create' command
+ * Handle 'ccs api create' command
  */
 async function handleCreate(args: string[]): Promise<void> {
   await initUI();
@@ -166,14 +166,14 @@ async function handleCreate(args: string[]): Promise<void> {
   console.log(header('Create API Profile'));
   console.log('');
 
-  // Step 1: Profile name
+  // Step 1: API name
   let name = parsedArgs.name;
   if (!name) {
-    name = await InteractivePrompt.input('Profile name', {
-      validate: validateProfileName,
+    name = await InteractivePrompt.input('API name', {
+      validate: validateApiName,
     });
   } else {
-    const error = validateProfileName(name);
+    const error = validateApiName(name);
     if (error) {
       console.log(fail(error));
       process.exit(1);
@@ -181,8 +181,8 @@ async function handleCreate(args: string[]): Promise<void> {
   }
 
   // Check if exists
-  if (profileExists(name) && !parsedArgs.force) {
-    console.log(fail(`Profile '${name}' already exists`));
+  if (apiExists(name) && !parsedArgs.force) {
+    console.log(fail(`API '${name}' already exists`));
     console.log(`    Use ${color('--force', 'command')} to overwrite`);
     process.exit(1);
   }
@@ -223,7 +223,7 @@ async function handleCreate(args: string[]): Promise<void> {
 
   // Create files
   console.log('');
-  console.log(info('Creating profile...'));
+  console.log(info('Creating API profile...'));
 
   try {
     const settingsPath = createSettingsFile(name, baseUrl, apiKey, model);
@@ -232,11 +232,11 @@ async function handleCreate(args: string[]): Promise<void> {
     console.log('');
     console.log(
       infoBox(
-        `Profile:  ${name}\n` +
+        `API:      ${name}\n` +
           `Settings: ~/.ccs/${name}.settings.json\n` +
           `Base URL: ${baseUrl}\n` +
           `Model:    ${model}`,
-        'Profile Created'
+        'API Profile Created'
       )
     );
     console.log('');
@@ -244,18 +244,18 @@ async function handleCreate(args: string[]): Promise<void> {
     console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
     console.log('');
   } catch (error) {
-    console.log(fail(`Failed to create profile: ${(error as Error).message}`));
+    console.log(fail(`Failed to create API profile: ${(error as Error).message}`));
     process.exit(1);
   }
 }
 
 /**
- * Check if profile has real API key (not placeholder)
+ * Check if API profile has real API key (not placeholder)
  */
-function isProfileConfigured(profileName: string): boolean {
+function isApiConfigured(apiName: string): boolean {
   try {
     const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profileName}.settings.json`);
+    const settingsPath = path.join(ccsDir, `${apiName}.settings.json`);
     if (!fs.existsSync(settingsPath)) return false;
 
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
@@ -268,31 +268,31 @@ function isProfileConfigured(profileName: string): boolean {
 }
 
 /**
- * Handle 'ccs profile list' command
+ * Handle 'ccs api list' command
  */
 async function handleList(): Promise<void> {
   await initUI();
 
-  console.log(header('CCS Profiles'));
+  console.log(header('CCS API Profiles'));
   console.log('');
 
   try {
     const config = loadConfig();
-    const profiles = Object.keys(config.profiles);
+    const apis = Object.keys(config.profiles);
 
-    if (profiles.length === 0) {
-      console.log(warn('No profiles configured'));
+    if (apis.length === 0) {
+      console.log(warn('No API profiles configured'));
       console.log('');
-      console.log('To create a profile:');
-      console.log(`  ${color('ccs profile create', 'command')}`);
+      console.log('To create an API profile:');
+      console.log(`  ${color('ccs api create', 'command')}`);
       console.log('');
       return;
     }
 
     // Build table data with status indicators
-    const rows: string[][] = profiles.map((name) => {
+    const rows: string[][] = apis.map((name) => {
       const settingsPath = config.profiles[name];
-      const status = isProfileConfigured(name) ? color('[OK]', 'success') : color('[!]', 'warning');
+      const status = isApiConfigured(name) ? color('[OK]', 'success') : color('[!]', 'warning');
 
       return [name, settingsPath, status];
     });
@@ -300,7 +300,7 @@ async function handleList(): Promise<void> {
     // Print table
     console.log(
       table(rows, {
-        head: ['Profile', 'Settings File', 'Status'],
+        head: ['API', 'Settings File', 'Status'],
         colWidths: [15, 35, 10],
       })
     );
@@ -323,22 +323,22 @@ async function handleList(): Promise<void> {
       console.log('');
     }
 
-    console.log(dim(`Total: ${profiles.length} profile(s)`));
+    console.log(dim(`Total: ${apis.length} API profile(s)`));
     console.log('');
   } catch (error) {
-    console.log(fail(`Failed to list profiles: ${(error as Error).message}`));
+    console.log(fail(`Failed to list API profiles: ${(error as Error).message}`));
     process.exit(1);
   }
 }
 
 /**
- * Handle 'ccs profile remove' command
+ * Handle 'ccs api remove' command
  */
 async function handleRemove(args: string[]): Promise<void> {
   await initUI();
   const parsedArgs = parseArgs(args);
 
-  // Load config first to get available profiles
+  // Load config first to get available APIs
   let config: { profiles: Record<string, string>; cliproxy?: Record<string, unknown> };
   try {
     config = loadConfig();
@@ -347,35 +347,35 @@ async function handleRemove(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const profiles = Object.keys(config.profiles);
-  if (profiles.length === 0) {
-    console.log(warn('No profiles to remove'));
+  const apis = Object.keys(config.profiles);
+  if (apis.length === 0) {
+    console.log(warn('No API profiles to remove'));
     process.exit(0);
   }
 
-  // Interactive profile selection if not provided
+  // Interactive API selection if not provided
   let name = parsedArgs.name;
   if (!name) {
-    console.log(header('Remove Profile'));
+    console.log(header('Remove API Profile'));
     console.log('');
-    console.log('Available profiles:');
-    profiles.forEach((p, i) => console.log(`  ${i + 1}. ${p}`));
+    console.log('Available APIs:');
+    apis.forEach((p, i) => console.log(`  ${i + 1}. ${p}`));
     console.log('');
 
-    name = await InteractivePrompt.input('Profile name to remove', {
+    name = await InteractivePrompt.input('API name to remove', {
       validate: (val) => {
-        if (!val) return 'Profile name is required';
-        if (!profiles.includes(val)) return `Profile '${val}' not found`;
+        if (!val) return 'API name is required';
+        if (!apis.includes(val)) return `API '${val}' not found`;
         return null;
       },
     });
   }
 
   if (!(name in config.profiles)) {
-    console.log(fail(`Profile '${name}' not found`));
+    console.log(fail(`API '${name}' not found`));
     console.log('');
-    console.log('Available profiles:');
-    profiles.forEach((p) => console.log(`  - ${p}`));
+    console.log('Available APIs:');
+    apis.forEach((p) => console.log(`  - ${p}`));
     process.exit(1);
   }
 
@@ -384,12 +384,13 @@ async function handleRemove(args: string[]): Promise<void> {
 
   // Confirm deletion
   console.log('');
-  console.log(`Profile '${color(name, 'command')}' will be removed.`);
+  console.log(`API '${color(name, 'command')}' will be removed.`);
   console.log(`  Settings: ${settingsPath}`);
   console.log('');
 
   const confirmed =
-    parsedArgs.yes || (await InteractivePrompt.confirm('Delete this profile?', { default: false }));
+    parsedArgs.yes ||
+    (await InteractivePrompt.confirm('Delete this API profile?', { default: false }));
 
   if (!confirmed) {
     console.log(info('Cancelled'));
@@ -408,25 +409,25 @@ async function handleRemove(args: string[]): Promise<void> {
     fs.unlinkSync(expandedPath);
   }
 
-  console.log(ok(`Profile removed: ${name}`));
+  console.log(ok(`API profile removed: ${name}`));
   console.log('');
 }
 
 /**
- * Show help for profile commands
+ * Show help for api commands
  */
 async function showHelp(): Promise<void> {
   await initUI();
 
-  console.log(header('CCS Profile Management'));
+  console.log(header('CCS API Management'));
   console.log('');
   console.log(subheader('Usage'));
-  console.log(`  ${color('ccs profile', 'command')} <command> [options]`);
+  console.log(`  ${color('ccs api', 'command')} <command> [options]`);
   console.log('');
   console.log(subheader('Commands'));
   console.log(`  ${color('create [name]', 'command')}    Create new API profile (interactive)`);
-  console.log(`  ${color('list', 'command')}             List all profiles`);
-  console.log(`  ${color('remove <name>', 'command')}    Remove a profile`);
+  console.log(`  ${color('list', 'command')}             List all API profiles`);
+  console.log(`  ${color('remove <name>', 'command')}    Remove an API profile`);
   console.log('');
   console.log(subheader('Options'));
   console.log(`  ${color('--base-url <url>', 'command')}     API base URL (create)`);
@@ -437,23 +438,23 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Examples'));
   console.log(`  ${dim('# Interactive wizard')}`);
-  console.log(`  ${color('ccs profile create', 'command')}`);
+  console.log(`  ${color('ccs api create', 'command')}`);
   console.log('');
   console.log(`  ${dim('# Create with name')}`);
-  console.log(`  ${color('ccs profile create myapi', 'command')}`);
+  console.log(`  ${color('ccs api create myapi', 'command')}`);
   console.log('');
-  console.log(`  ${dim('# Remove profile')}`);
-  console.log(`  ${color('ccs profile remove myapi', 'command')}`);
+  console.log(`  ${dim('# Remove API profile')}`);
+  console.log(`  ${color('ccs api remove myapi', 'command')}`);
   console.log('');
-  console.log(`  ${dim('# Show all profiles')}`);
-  console.log(`  ${color('ccs profile list', 'command')}`);
+  console.log(`  ${dim('# Show all API profiles')}`);
+  console.log(`  ${color('ccs api list', 'command')}`);
   console.log('');
 }
 
 /**
- * Main profile command router
+ * Main api command router
  */
-export async function handleProfileCommand(args: string[]): Promise<void> {
+export async function handleApiCommand(args: string[]): Promise<void> {
   const command = args[0];
 
   if (!command || command === '--help' || command === '-h' || command === 'help') {
@@ -478,7 +479,7 @@ export async function handleProfileCommand(args: string[]): Promise<void> {
       console.log(fail(`Unknown command: ${command}`));
       console.log('');
       console.log('Run for help:');
-      console.log(`  ${color('ccs profile --help', 'command')}`);
+      console.log(`  ${color('ccs api --help', 'command')}`);
       process.exit(1);
   }
 }

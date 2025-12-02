@@ -139,7 +139,7 @@ export function color(text: string, semantic: SemanticColor): string {
     case 'secondary':
       return chalkModule.hex(COLORS.secondary)(text);
     case 'command':
-      return chalkModule.yellow.italic(text);
+      return chalkModule.yellow.bold(text);
     case 'path':
       return chalkModule.cyan.underline(text);
     default:
@@ -458,6 +458,24 @@ export function hr(char = '─', width = 60): string {
   return dim(char.repeat(width));
 }
 
+/**
+ * Print section header with ═══ borders
+ * Format: ═══ Title ═══
+ */
+export function sectionHeader(title: string): string {
+  const border = '═══';
+  const headerText = `${border} ${title} ${border}`;
+  // Use gradient + bold for visual appeal
+  if (gradientModule && chalkModule && useColors()) {
+    return chalkModule.bold(gradientModule([COLORS.primary, COLORS.secondary])(headerText));
+  }
+  // Fallback to bold primary color
+  if (useColors() && chalkModule) {
+    return chalkModule.hex(COLORS.primary).bold(headerText);
+  }
+  return headerText;
+}
+
 // =============================================================================
 // TASK LISTS (Listr2 Integration)
 // =============================================================================
@@ -604,6 +622,7 @@ export const ui = {
   // Headers
   header,
   subheader,
+  sectionHeader,
   hr,
 } as const;
 
