@@ -24,6 +24,15 @@ interface PasswordOptions {
   mask?: string; // Character to show (default: '*')
 }
 
+interface SelectOption {
+  id: string;
+  label: string;
+}
+
+interface SelectOptions {
+  defaultIndex?: number;
+}
+
 export class InteractivePrompt {
   /**
    * Ask for confirmation
@@ -203,6 +212,91 @@ export class InteractivePrompt {
 
       process.stdin.on('data', onData);
       process.stdin.resume();
+    });
+  }
+
+  /**
+   * Select from a numbered list
+   *
+   * Displays options with numbers and waits for user selection.
+   * Shows default with asterisk (*) prefix.
+   */
+  static async selectFromList(
+    prompt: string,
+    options: SelectOption[],
+    selectOptions: SelectOptions = {}
+  ): Promise<string> {
+    const { defaultIndex = 0 } = selectOptions;
+
+    // Check for --yes flag (automation) - use default
+    if (
+      process.env.CCS_YES === '1' ||
+      process.argv.includes('--yes') ||
+      process.argv.includes('-y')
+    ) {
+      console.error(`[i] Using default: ${options[defaultIndex].label}`);
+      return options[defaultIndex].id;
+    }
+
+    // Check for --no-input flag (CI)
+    if (process.env.CCS_NO_INPUT === '1' || process.argv.includes('--no-input')) {
+      console.error(`[i] Using default: ${options[defaultIndex].label}`);
+      return options[defaultIndex].id;
+    }
+
+    // Non-TTY: use default
+    if (!process.stdin.isTTY) {
+      console.error(`[i] Using default: ${options[defaultIndex].label}`);
+      return options[defaultIndex].id;
+    }
+
+    // Display prompt and options
+    console.error(`${prompt}`);
+    console.error('');
+
+    options.forEach((opt, i) => {
+      const marker = i === defaultIndex ? '*' : ' ';
+      const num = String(i + 1).padStart(2);
+      console.error(`  ${marker}${num}. ${opt.label}`);
+    });
+
+    console.error('');
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stderr,
+      terminal: true,
+    });
+
+    const defaultNum = String(defaultIndex + 1);
+    const promptText = `Enter choice [1-${options.length}] (default: ${defaultNum}): `;
+
+    return new Promise((resolve) => {
+      rl.question(promptText, (answer: string) => {
+        rl.close();
+
+        const normalized = answer.trim();
+
+        // Empty answer: use default
+        if (normalized === '') {
+          console.error(`[i] Using default: ${options[defaultIndex].label}`);
+          resolve(options[defaultIndex].id);
+          return;
+        }
+
+        // Parse number
+        const num = parseInt(normalized, 10);
+
+        // Validate range
+        if (isNaN(num) || num < 1 || num > options.length) {
+          console.error(`[!] Invalid choice. Please enter 1-${options.length}`);
+          resolve(InteractivePrompt.selectFromList(prompt, options, selectOptions));
+          return;
+        }
+
+        const selected = options[num - 1];
+        resolve(selected.id);
+      });
     });
   }
 }
