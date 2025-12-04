@@ -26,8 +26,8 @@ import {
 } from './config-generator';
 import { isAuthenticated } from './auth-handler';
 import { CLIProxyProvider, ExecutorConfig } from './types';
-import { configureProviderModel } from './model-config';
-import { supportsModelConfig } from './model-catalog';
+import { configureProviderModel, getCurrentModel } from './model-config';
+import { supportsModelConfig, isModelBroken, getModelIssueUrl, findModel } from './model-catalog';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -170,7 +170,24 @@ export async function execClaudeWithCLIProxy(
     await configureProviderModel(provider, false); // false = only if not configured
   }
 
-  // 5. Ensure user settings file exists (creates from defaults if not)
+  // 5. Check for known broken models and warn user
+  const currentModel = getCurrentModel(provider);
+  if (currentModel && isModelBroken(provider, currentModel)) {
+    const modelEntry = findModel(provider, currentModel);
+    const issueUrl = getModelIssueUrl(provider, currentModel);
+    console.error('');
+    console.error(
+      `[!] Warning: ${modelEntry?.name || currentModel} has known issues with Claude Code`
+    );
+    console.error('    Tool calls will fail. Use "gemini-3-pro-preview" instead.');
+    if (issueUrl) {
+      console.error(`    Tracking: ${issueUrl}`);
+    }
+    console.error(`    Run "ccs ${provider} --config" to change model.`);
+    console.error('');
+  }
+
+  // 6. Ensure user settings file exists (creates from defaults if not)
   ensureProviderSettings(provider);
 
   // 6. Generate config file

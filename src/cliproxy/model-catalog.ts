@@ -19,6 +19,10 @@ export interface ModelEntry {
   tier?: 'free' | 'paid';
   /** Optional description for the model */
   description?: string;
+  /** Model has known issues - show warning when selected */
+  broken?: boolean;
+  /** Issue URL for broken models */
+  issueUrl?: string;
 }
 
 /**
@@ -46,16 +50,22 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         id: 'gemini-claude-opus-4-5-thinking',
         name: 'Claude Opus 4.5 Thinking',
         description: 'Most capable, extended thinking',
+        broken: true,
+        issueUrl: 'https://github.com/router-for-me/CLIProxyAPI/issues/415',
       },
       {
         id: 'gemini-claude-sonnet-4-5-thinking',
         name: 'Claude Sonnet 4.5 Thinking',
         description: 'Balanced with extended thinking',
+        broken: true,
+        issueUrl: 'https://github.com/router-for-me/CLIProxyAPI/issues/415',
       },
       {
         id: 'gemini-claude-sonnet-4-5',
         name: 'Claude Sonnet 4.5',
         description: 'Fast and capable',
+        broken: true,
+        issueUrl: 'https://github.com/router-for-me/CLIProxyAPI/issues/415',
       },
       {
         id: 'gemini-3-pro-preview',
@@ -106,4 +116,20 @@ export function findModel(provider: CLIProxyProvider, modelId: string): ModelEnt
   const catalog = MODEL_CATALOG[provider];
   if (!catalog) return undefined;
   return catalog.models.find((m) => m.id === modelId);
+}
+
+/**
+ * Check if model has known issues
+ */
+export function isModelBroken(provider: CLIProxyProvider, modelId: string): boolean {
+  const model = findModel(provider, modelId);
+  return model?.broken === true;
+}
+
+/**
+ * Get issue URL for broken model
+ */
+export function getModelIssueUrl(provider: CLIProxyProvider, modelId: string): string | undefined {
+  const model = findModel(provider, modelId);
+  return model?.issueUrl;
 }

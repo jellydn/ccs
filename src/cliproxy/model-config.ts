@@ -45,7 +45,8 @@ export function getCurrentModel(provider: CLIProxyProvider): string | undefined 
 function formatModelOption(model: ModelEntry): string {
   // Tier badge: clarify that "paid" means paid Google account (not free tier)
   const tierBadge = model.tier === 'paid' ? color(' [Paid Tier]', 'warning') : '';
-  return `${model.name}${tierBadge}`;
+  const brokenBadge = model.broken ? color(' [BROKEN]', 'error') : '';
+  return `${model.name}${tierBadge}${brokenBadge}`;
 }
 
 /**
@@ -55,8 +56,9 @@ function formatModelDetailed(model: ModelEntry, isCurrent: boolean): string {
   const marker = isCurrent ? color('>', 'success') : ' ';
   const name = isCurrent ? bold(model.name) : model.name;
   const tierBadge = model.tier === 'paid' ? color(' [Paid Tier]', 'warning') : '';
+  const brokenBadge = model.broken ? color(' [BROKEN]', 'error') : '';
   const desc = model.description ? dim(` - ${model.description}`) : '';
-  return `  ${marker} ${name}${tierBadge}${desc}`;
+  return `  ${marker} ${name}${tierBadge}${brokenBadge}${desc}`;
 }
 
 /**
