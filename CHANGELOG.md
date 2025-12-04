@@ -1,4 +1,10 @@
-# [5.5.0-dev.1](https://github.com/kaitranntt/ccs/compare/v5.4.4-dev.2...v5.5.0-dev.1) (2025-12-04)
+# [5.5.0](https://github.com/kaitranntt/ccs/compare/v5.4.3...v5.5.0) (2025-12-04)
+
+
+### Bug Fixes
+
+* **changelog:** restore full changelog history from main ([2e5b1f2](https://github.com/kaitranntt/ccs/commit/2e5b1f212abe5611c164cc84388002686175bc8b))
+* **tests:** migrate test suite from mocha to bun test runner ([bd46c8d](https://github.com/kaitranntt/ccs/commit/bd46c8de1237e3a76c774b00a1c9e026f4c0cd4b))
 
 
 ### Features
