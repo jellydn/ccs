@@ -3,51 +3,70 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* CCS Brand Colors */
-  --primary: oklch(0.58 0.22 28); /* Crail #C15F3C */
-  --primary-foreground: oklch(0.98 0.01 0);
-  --secondary: oklch(0.95 0.02 28); /* Claude #F4F3EE */
-  --secondary-foreground: oklch(0.1 0 0);
-  --accent: oklch(0.15 0 0); /* Woodsmoke */
-  --accent-foreground: oklch(0.98 0.01 0);
+  /* CCS Brand Colors - Calculated from Crail, Pampas, White, Cloudy */
+  --primary: oklch(0.5971 0.1352 39.87); /* Crail */
+  --primary-foreground: oklch(1 0 0); /* White */
 
-  --background: oklch(0.98 0.01 0);
-  --foreground: oklch(0.1 0 0);
-  --muted: oklch(0.9 0.01 0);
-  --muted-foreground: oklch(0.55 0 0);
-  --border: oklch(0.88 0.01 0);
-  --ring: oklch(0.58 0.22 28);
+  --secondary: oklch(0.9 0.01 95); /* Light Cloudy */
+  --secondary-foreground: oklch(0.2 0.02 40);
+
+  --accent: oklch(0.92 0.01 95); /* Soft warm accent */
+  --accent-foreground: oklch(0.2 0.02 40);
+
+  --background: oklch(0.9635 0.0067 97.35); /* Pampas */
+  --foreground: oklch(0.2 0.02 40); /* Dark warm grey */
+
+  --muted: oklch(0.92 0.01 95);
+  --muted-foreground: oklch(0.55 0.02 40);
+
+  --border: oklch(0.85 0.015 91.6); /* Based on Cloudy */
+  --input: oklch(0.85 0.015 91.6);
+
+  --ring: oklch(0.5971 0.1352 39.87); /* Crail */
   --radius: 0.5rem;
 
-  /* Sidebar colors */
-  --sidebar: oklch(0.98 0.01 0);
-  --sidebar-foreground: oklch(0.1 0 0);
-  --sidebar-primary: oklch(0.58 0.22 28);
-  --sidebar-primary-foreground: oklch(0.98 0.01 0);
-  --sidebar-accent: oklch(0.95 0.02 28);
-  --sidebar-accent-foreground: oklch(0.1 0 0);
-  --sidebar-border: oklch(0.88 0.01 0);
-  --sidebar-ring: oklch(0.58 0.22 28);
+  /* Sidebar colors - Light */
+  --sidebar: oklch(0.9635 0.0067 97.35); /* Pampas */
+  --sidebar-foreground: oklch(0.2 0.02 40);
+  --sidebar-primary: oklch(0.5971 0.1352 39.87); /* Crail */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.92 0.01 95);
+  --sidebar-accent-foreground: oklch(0.2 0.02 40);
+  --sidebar-border: oklch(0.85 0.015 91.6);
+  --sidebar-ring: oklch(0.5971 0.1352 39.87);
 }
 
 .dark {
-  --primary: oklch(0.65 0.2 28);
-  --primary-foreground: oklch(0.1 0 0);
-  --background: oklch(0.1 0 0);
-  --foreground: oklch(0.98 0.01 0);
-  --muted: oklch(0.2 0 0);
-  --muted-foreground: oklch(0.65 0 0);
-  --border: oklch(0.2 0 0);
+  /* Dark Theme - Complementary to Crail/Pampas */
+  --primary: oklch(0.65 0.14 39.87); /* Slightly lighter Crail for dark mode */
+  --primary-foreground: oklch(1 0 0);
 
-  /* Sidebar dark theme */
-  --sidebar: oklch(0.1 0 0);
-  --sidebar-foreground: oklch(0.98 0.01 0);
-  --sidebar-primary: oklch(0.65 0.2 28);
-  --sidebar-primary-foreground: oklch(0.1 0 0);
-  --sidebar-accent: oklch(0.15 0 0);
-  --sidebar-accent-foreground: oklch(0.98 0.01 0);
-  --sidebar-border: oklch(0.2 0 0);
-  --sidebar-ring: oklch(0.65 0.2 28);
+  --background: oklch(0.14 0.01 40); /* Deep warm charcoal */
+  --foreground: oklch(0.9635 0.0067 97.35); /* Pampas */
+
+  --secondary: oklch(0.25 0.01 40);
+  --secondary-foreground: oklch(0.96 0.007 97);
+
+  --muted: oklch(0.25 0.01 40);
+  --muted-foreground: oklch(0.7 0.01 40);
+
+  --accent: oklch(0.25 0.01 40);
+  --accent-foreground: oklch(0.96 0.007 97);
+
+  --border: oklch(0.25 0.01 40);
+  --input: oklch(0.25 0.01 40);
+
+  --ring: oklch(0.65 0.14 39.87);
+
+  /* Sidebar Dark Theme */
+  --sidebar: oklch(0.12 0.01 40); /* Slightly darker than bg */
+  --sidebar-foreground: oklch(0.9635 0.0067 97.35);
+  --sidebar-primary: oklch(0.65 0.14 39.87);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.25 0.01 40);
+  --sidebar-accent-foreground: oklch(0.9635 0.0067 97.35);
+  --sidebar-border: oklch(0.25 0.01 40);
+  --sidebar-ring: oklch(0.65 0.14 39.87);
 }
 
 @theme inline {
