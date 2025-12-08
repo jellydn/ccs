@@ -63,7 +63,7 @@ export function SharedPage() {
           <div className="grid gap-3">
             {items?.items.map((item) => (
               <Card key={item.name}>
-                <CardContent className="pt-4">
+                <CardContent>
                   <div className="font-medium">{item.name}</div>
                   <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
                   <p className="text-xs text-muted-foreground mt-2 font-mono truncate">
