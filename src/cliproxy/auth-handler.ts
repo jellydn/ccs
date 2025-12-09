@@ -27,6 +27,7 @@ import {
   registerAccount,
   touchAccount,
 } from './account-manager';
+import { preflightOAuthCheck } from '../management/oauth-port-diagnostics';
 
 /**
  * OAuth callback ports used by CLIProxyAPI (hardcoded in binary)
@@ -90,26 +91,50 @@ function killProcessOnPort(port: number, verbose: boolean): boolean {
 
 /**
  * Detect if running in a headless environment (no browser available)
+ *
+ * IMPROVED: Avoids false positives on Windows desktop environments
+ * where isTTY may be undefined due to terminal wrapper behavior.
+ *
+ * Case study: Vietnamese Windows users reported "command hangs" because
+ * their terminal (PowerShell via npm) didn't set isTTY correctly.
  */
 function isHeadlessEnvironment(): boolean {
-  // SSH session
+  // SSH session - always headless
   if (process.env.SSH_TTY || process.env.SSH_CLIENT || process.env.SSH_CONNECTION) {
     return true;
   }
 
-  // No display (Linux/X11)
+  // No display on Linux (X11/Wayland) - headless
   if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
     return true;
   }
 
-  // Non-interactive (piped stdin) - skip on Windows
-  // Windows npm wrappers don't set isTTY correctly (returns undefined, not true)
+  // Windows desktop - NEVER headless unless SSH (already checked above)
+  // This fixes false positive where Windows npm wrappers don't set isTTY correctly
   // Windows desktop environments always have browser capability
-  if (process.platform !== 'win32' && !process.stdin.isTTY) {
-    return true;
+  if (process.platform === 'win32') {
+    return false;
   }
 
-  return false;
+  // macOS - check for proper terminal
+  if (process.platform === 'darwin') {
+    // Non-interactive stdin on macOS means likely piped/scripted
+    if (!process.stdin.isTTY) {
+      return true;
+    }
+    return false;
+  }
+
+  // Linux with display - check TTY
+  if (process.platform === 'linux') {
+    if (!process.stdin.isTTY) {
+      return true;
+    }
+    return false;
+  }
+
+  // Default fallback for unknown platforms
+  return !process.stdin.isTTY;
 }
 
 /**
@@ -421,6 +446,19 @@ export async function triggerOAuth(
       console.error(`[auth] ${msg}`);
     }
   };
+
+  // Pre-flight check: verify OAuth callback port is available
+  const preflight = await preflightOAuthCheck(provider);
+  if (!preflight.ready) {
+    console.log('');
+    console.log('[!] OAuth pre-flight check failed:');
+    for (const issue of preflight.issues) {
+      console.log(`    ${issue}`);
+    }
+    console.log('');
+    console.log('[i] Resolve the port conflict and try again.');
+    return null;
+  }
 
   // Ensure binary exists
   let binaryPath: string;
