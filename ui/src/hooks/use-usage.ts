@@ -175,22 +175,6 @@ export function useModelUsage(options?: UsageQueryOptions) {
   });
 }
 
-export function useSessions(options?: UsageQueryOptions) {
-  return useQuery({
-    queryKey: ['usage', 'sessions', options],
-    queryFn: () => usageApi.sessions(options),
-    staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-export function useMonthlyUsage(months?: number, profile?: string) {
-  return useQuery({
-    queryKey: ['usage', 'monthly', months, profile],
-    queryFn: () => usageApi.monthly(months, profile),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
 /**
  * Hook to refresh all usage data
  * Clears server-side cache and invalidates React Query cache
