@@ -61,38 +61,35 @@ export async function handleMigrateCommand(args: string[]): Promise<void> {
     console.log('');
   }
 
-  console.log('[i] Migrating to unified config format (v2)...');
-  console.log('');
-
   const result = await migrate(dryRun);
 
   if (result.success) {
-    console.log('[OK] Migration complete');
     console.log('');
-
-    if (result.backupPath) {
-      console.log(`    Backup created: ${result.backupPath}`);
+    console.log('╭─────────────────────────────────────────────────────────╮');
+    if (dryRun) {
+      console.log('│  [i] Dry run - migration preview (no changes made)      │');
+    } else {
+      console.log('│  [OK] Migrated to unified config (config.yaml)          │');
     }
+    console.log('╰─────────────────────────────────────────────────────────╯');
 
-    if (result.migratedFiles.length > 0) {
-      console.log('');
-      console.log('    Migrated:');
-      result.migratedFiles.forEach((f) => console.log(`      - ${f}`));
+    if (result.backupPath && !dryRun) {
+      console.log(`  Backup: ${result.backupPath}`);
     }
+    console.log(`  Items:  ${result.migratedFiles.length} migrated`);
 
     if (result.warnings.length > 0) {
-      console.log('');
-      console.log('    Warnings:');
-      result.warnings.forEach((w) => console.log(`      [!] ${w}`));
+      for (const warning of result.warnings) {
+        console.log(`  [!] ${warning}`);
+      }
     }
 
     if (dryRun) {
-      console.log('');
-      console.log('[i] This was a dry run. Run without --dry-run to apply changes.');
+      console.log('  Run without --dry-run to apply changes');
     } else {
-      console.log('');
-      console.log('[i] To rollback: ccs migrate --rollback ' + result.backupPath);
+      console.log('  Rollback: ccs migrate --rollback');
     }
+    console.log('');
   } else {
     console.error(`[X] Migration failed: ${result.error}`);
 
