@@ -203,8 +203,11 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   // Auto-migrate to unified config format (silent if already migrated)
-  const { autoMigrate } = await import('./config/migration-manager');
-  await autoMigrate();
+  // Skip if user is explicitly running migrate command
+  if (args[0] !== 'migrate') {
+    const { autoMigrate } = await import('./config/migration-manager');
+    await autoMigrate();
+  }
 
   // Special case: version command (check BEFORE profile detection)
   const firstArg = args[0];
