@@ -3,9 +3,14 @@
  *
  * Manages CCS API profiles for custom API providers.
  * Commands: create, list, remove
+ *
+ * Supports dual-mode configuration:
+ * - Unified YAML format (config.yaml) when CCS_UNIFIED_CONFIG=1 or config.yaml exists
+ * - Legacy JSON format (config.json, *.settings.json) as fallback
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   initUI,
@@ -22,6 +27,14 @@ import {
 } from '../utils/ui';
 import { InteractivePrompt } from '../utils/prompt';
 import { getCcsDir, getConfigPath, loadConfig } from '../utils/config-manager';
+import { isReservedName } from '../config/reserved-names';
+import {
+  hasUnifiedConfig,
+  loadOrCreateUnifiedConfig,
+  saveUnifiedConfig,
+} from '../config/unified-config-loader';
+import { deleteAllProfileSecrets } from '../config/secrets-manager';
+import { isUnifiedConfigEnabled } from '../config/feature-flags';
 
 interface ApiCommandArgs {
   name?: string;
@@ -72,16 +85,15 @@ function validateApiName(name: string): string | null {
   if (name.length > 32) {
     return 'API name must be 32 characters or less';
   }
-  // Reserved names
-  const reserved = ['default', 'auth', 'api', 'doctor', 'sync', 'update', 'help', 'version'];
-  if (reserved.includes(name.toLowerCase())) {
+  // Use centralized reserved names list
+  if (isReservedName(name)) {
     return `'${name}' is a reserved name`;
   }
   return null;
 }
 
 /**
- * Validate URL format
+ * Validate URL format and warn about common mistakes
  */
 function validateUrl(url: string): string | null {
   if (!url) {
@@ -96,10 +108,40 @@ function validateUrl(url: string): string | null {
 }
 
 /**
- * Check if API profile already exists in config.json
+ * Check if URL looks like it includes endpoint path (common mistake)
+ * Returns warning message if problematic, null if OK
+ */
+function getUrlWarning(url: string): string | null {
+  const problematicPaths = ['/chat/completions', '/v1/messages', '/messages', '/completions'];
+  const lowerUrl = url.toLowerCase();
+
+  for (const path of problematicPaths) {
+    if (lowerUrl.endsWith(path)) {
+      return (
+        `URL ends with "${path}" - Claude appends this automatically.\n` +
+        `    You likely want: ${url.replace(new RegExp(path + '$', 'i'), '')}`
+      );
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if unified config mode is active
+ */
+function isUnifiedMode(): boolean {
+  return hasUnifiedConfig() || isUnifiedConfigEnabled();
+}
+
+/**
+ * Check if API profile already exists in config
  */
 function apiExists(name: string): boolean {
   try {
+    if (isUnifiedMode()) {
+      const config = loadOrCreateUnifiedConfig();
+      return name in config.profiles;
+    }
     const config = loadConfig();
     return name in config.profiles;
   } catch {
@@ -107,11 +149,24 @@ function apiExists(name: string): boolean {
   }
 }
 
+/** Model mapping for API profiles */
+interface ModelMapping {
+  default: string;
+  opus: string;
+  sonnet: string;
+  haiku: string;
+}
+
 /**
  * Create settings.json file for API profile
  * Includes all 4 model fields for proper Claude CLI integration
  */
-function createSettingsFile(name: string, baseUrl: string, apiKey: string, model: string): string {
+function createSettingsFile(
+  name: string,
+  baseUrl: string,
+  apiKey: string,
+  models: ModelMapping
+): string {
   const ccsDir = getCcsDir();
   const settingsPath = path.join(ccsDir, `${name}.settings.json`);
 
@@ -119,10 +174,10 @@ function createSettingsFile(name: string, baseUrl: string, apiKey: string, model
     env: {
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_AUTH_TOKEN: apiKey,
-      ANTHROPIC_MODEL: model,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: model,
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
+      ANTHROPIC_MODEL: models.default,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
     },
   };
 
@@ -161,6 +216,82 @@ function updateConfig(name: string, _settingsPath: string): void {
 }
 
 /**
+ * Create API profile in unified config
+ * Creates *.settings.json file and stores reference in config.yaml
+ * (matching Claude's ~/.claude/settings.json pattern)
+ */
+function createApiProfileUnified(
+  name: string,
+  baseUrl: string,
+  apiKey: string,
+  models: ModelMapping
+): void {
+  const ccsDir = path.join(os.homedir(), '.ccs');
+  const settingsFile = `${name}.settings.json`;
+  const settingsPath = path.join(ccsDir, settingsFile);
+
+  // Create settings file with all env vars (matching Claude's pattern)
+  const settings = {
+    env: {
+      ANTHROPIC_BASE_URL: baseUrl,
+      ANTHROPIC_AUTH_TOKEN: apiKey,
+      ANTHROPIC_MODEL: models.default,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+    },
+  };
+
+  // Ensure directory exists
+  if (!fs.existsSync(ccsDir)) {
+    fs.mkdirSync(ccsDir, { recursive: true });
+  }
+
+  // Write settings file
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+
+  // Store reference in config.yaml
+  const config = loadOrCreateUnifiedConfig();
+  config.profiles[name] = {
+    type: 'api',
+    settings: `~/.ccs/${settingsFile}`,
+  };
+  saveUnifiedConfig(config);
+}
+
+/**
+ * Remove API profile from unified config
+ */
+function removeApiProfileUnified(name: string): void {
+  const config = loadOrCreateUnifiedConfig();
+  const profile = config.profiles[name];
+
+  if (!profile) {
+    throw new Error(`API profile not found: ${name}`);
+  }
+
+  // Delete the settings file if it exists
+  if (profile.settings) {
+    const settingsPath = profile.settings.replace(/^~/, os.homedir());
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
+  }
+
+  delete config.profiles[name];
+
+  // Clear default if it was the deleted profile
+  if (config.default === name) {
+    config.default = undefined;
+  }
+
+  saveUnifiedConfig(config);
+
+  // Remove any legacy secrets (backward compat)
+  deleteAllProfileSecrets(name);
+}
+
+/**
  * Handle 'ccs api create' command
  */
 async function handleCreate(args: string[]): Promise<void> {
@@ -194,14 +325,34 @@ async function handleCreate(args: string[]): Promise<void> {
   // Step 2: Base URL
   let baseUrl = parsedArgs.baseUrl;
   if (!baseUrl) {
-    baseUrl = await InteractivePrompt.input('API Base URL (e.g., https://api.example.com)', {
-      validate: validateUrl,
-    });
+    baseUrl = await InteractivePrompt.input(
+      'API Base URL (e.g., https://api.example.com/v1 - without /chat/completions)',
+      {
+        validate: validateUrl,
+      }
+    );
   } else {
     const error = validateUrl(baseUrl);
     if (error) {
       console.log(fail(error));
       process.exit(1);
+    }
+  }
+
+  // Check for common URL mistakes and warn
+  const urlWarning = getUrlWarning(baseUrl);
+  if (urlWarning) {
+    console.log('');
+    console.log(warn(urlWarning));
+    const continueAnyway = await InteractivePrompt.confirm('Continue with this URL anyway?', {
+      default: false,
+    });
+    if (!continueAnyway) {
+      // Let user re-enter URL
+      baseUrl = await InteractivePrompt.input('API Base URL', {
+        validate: validateUrl,
+        default: baseUrl.replace(/\/(chat\/completions|v1\/messages|messages|completions)$/i, ''),
+      });
     }
   }
 
@@ -219,33 +370,126 @@ async function handleCreate(args: string[]): Promise<void> {
   const defaultModel = 'claude-sonnet-4-5-20250929';
   let model = parsedArgs.model;
   if (!model && !parsedArgs.yes) {
-    model = await InteractivePrompt.input('Default model', {
+    model = await InteractivePrompt.input('Default model (ANTHROPIC_MODEL)', {
       default: defaultModel,
     });
   }
   model = model || defaultModel;
+
+  // Step 5: Model mapping for Opus/Sonnet/Haiku
+  // Auto-show if user entered a custom model, otherwise ask
+  let opusModel = model;
+  let sonnetModel = model;
+  let haikuModel = model;
+
+  const isCustomModel = model !== defaultModel;
+
+  if (!parsedArgs.yes) {
+    // If user entered custom model, auto-prompt for model mapping
+    // Otherwise, ask if they want to configure it
+    let wantCustomMapping = isCustomModel;
+
+    if (!isCustomModel) {
+      console.log('');
+      console.log(dim('Some API proxies route different model types to different backends.'));
+      wantCustomMapping = await InteractivePrompt.confirm(
+        'Configure different models for Opus/Sonnet/Haiku?',
+        { default: false }
+      );
+    }
+
+    if (wantCustomMapping) {
+      console.log('');
+      if (isCustomModel) {
+        console.log(dim('Configure model IDs for each tier (defaults to your model):'));
+      } else {
+        console.log(dim('Leave blank to use the default model for each.'));
+      }
+      opusModel =
+        (await InteractivePrompt.input('Opus model (ANTHROPIC_DEFAULT_OPUS_MODEL)', {
+          default: model,
+        })) || model;
+      sonnetModel =
+        (await InteractivePrompt.input('Sonnet model (ANTHROPIC_DEFAULT_SONNET_MODEL)', {
+          default: model,
+        })) || model;
+      haikuModel =
+        (await InteractivePrompt.input('Haiku model (ANTHROPIC_DEFAULT_HAIKU_MODEL)', {
+          default: model,
+        })) || model;
+    }
+  }
+
+  // Build model mapping
+  const models: ModelMapping = {
+    default: model,
+    opus: opusModel,
+    sonnet: sonnetModel,
+    haiku: haikuModel,
+  };
+
+  // Check if custom model mapping is configured
+  const hasCustomMapping = opusModel !== model || sonnetModel !== model || haikuModel !== model;
 
   // Create files
   console.log('');
   console.log(info('Creating API profile...'));
 
   try {
-    const settingsPath = createSettingsFile(name, baseUrl, apiKey, model);
-    updateConfig(name, settingsPath);
+    const settingsFile = `~/.ccs/${name}.settings.json`;
 
-    console.log('');
-    console.log(
-      infoBox(
+    if (isUnifiedMode()) {
+      // Use unified config format
+      createApiProfileUnified(name, baseUrl, apiKey, models);
+      console.log('');
+
+      // Build info message
+      let infoMsg =
         `API:      ${name}\n` +
-          `Settings: ~/.ccs/${name}.settings.json\n` +
-          `Base URL: ${baseUrl}\n` +
-          `Model:    ${model}`,
-        'API Profile Created'
-      )
-    );
+        `Config:   ~/.ccs/config.yaml\n` +
+        `Settings: ${settingsFile}\n` +
+        `Base URL: ${baseUrl}\n` +
+        `Model:    ${model}`;
+
+      if (hasCustomMapping) {
+        infoMsg +=
+          `\n\nModel Mapping:\n` +
+          `  Opus:   ${opusModel}\n` +
+          `  Sonnet: ${sonnetModel}\n` +
+          `  Haiku:  ${haikuModel}`;
+      }
+
+      console.log(infoBox(infoMsg, 'API Profile Created'));
+    } else {
+      // Use legacy JSON format
+      const settingsPath = createSettingsFile(name, baseUrl, apiKey, models);
+      updateConfig(name, settingsPath);
+      console.log('');
+
+      let infoMsg =
+        `API:      ${name}\n` +
+        `Settings: ${settingsFile}\n` +
+        `Base URL: ${baseUrl}\n` +
+        `Model:    ${model}`;
+
+      if (hasCustomMapping) {
+        infoMsg +=
+          `\n\nModel Mapping:\n` +
+          `  Opus:   ${opusModel}\n` +
+          `  Sonnet: ${sonnetModel}\n` +
+          `  Haiku:  ${haikuModel}`;
+      }
+
+      console.log(infoBox(infoMsg, 'API Profile Created'));
+    }
+
     console.log('');
     console.log(header('Usage'));
     console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
+    console.log('');
+    console.log(header('Edit Settings'));
+    console.log(`  ${dim('To modify env vars later:')}`);
+    console.log(`  ${color(`nano ${settingsFile.replace('~', '$HOME')}`, 'command')}`);
     console.log('');
   } catch (error) {
     console.log(fail(`Failed to create API profile: ${(error as Error).message}`));
@@ -258,6 +502,14 @@ async function handleCreate(args: string[]): Promise<void> {
  */
 function isApiConfigured(apiName: string): boolean {
   try {
+    if (isUnifiedMode()) {
+      // Check secrets.yaml for unified config
+      const { getProfileSecrets } = require('../config/secrets-manager');
+      const secrets = getProfileSecrets(apiName);
+      const token = secrets?.ANTHROPIC_AUTH_TOKEN || '';
+      return token.length > 0 && !token.includes('YOUR_') && !token.includes('your-');
+    }
+    // Legacy: check settings.json file
     const ccsDir = getCcsDir();
     const settingsPath = path.join(ccsDir, `${apiName}.settings.json`);
     if (!fs.existsSync(settingsPath)) return false;
@@ -281,6 +533,59 @@ async function handleList(): Promise<void> {
   console.log('');
 
   try {
+    if (isUnifiedMode()) {
+      // List from unified config
+      const unifiedConfig = loadOrCreateUnifiedConfig();
+      const apis = Object.keys(unifiedConfig.profiles);
+
+      if (apis.length === 0) {
+        console.log(warn('No API profiles configured'));
+        console.log('');
+        console.log('To create an API profile:');
+        console.log(`  ${color('ccs api create', 'command')}`);
+        console.log('');
+        return;
+      }
+
+      // Build table data with status indicators
+      const rows: string[][] = apis.map((name) => {
+        const status = isApiConfigured(name) ? color('[OK]', 'success') : color('[!]', 'warning');
+        return [name, 'config.yaml', status];
+      });
+
+      // Print table
+      console.log(
+        table(rows, {
+          head: ['API', 'Config', 'Status'],
+          colWidths: [15, 20, 10],
+        })
+      );
+      console.log('');
+
+      // Show CLIProxy variants if any
+      const variants = Object.keys(unifiedConfig.cliproxy?.variants || {});
+      if (variants.length > 0) {
+        console.log(subheader('CLIProxy Variants'));
+        const cliproxyRows = variants.map((name) => {
+          const variant = unifiedConfig.cliproxy?.variants[name];
+          return [name, variant?.provider || 'unknown', variant?.settings || '-'];
+        });
+
+        console.log(
+          table(cliproxyRows, {
+            head: ['Variant', 'Provider', 'Settings'],
+            colWidths: [15, 15, 30],
+          })
+        );
+        console.log('');
+      }
+
+      console.log(dim(`Total: ${apis.length} API profile(s)`));
+      console.log('');
+      return;
+    }
+
+    // Legacy: list from config.json
     const config = loadConfig();
     const apis = Object.keys(config.profiles);
 
@@ -342,16 +647,16 @@ async function handleRemove(args: string[]): Promise<void> {
   await initUI();
   const parsedArgs = parseArgs(args);
 
-  // Load config first to get available APIs
-  let config: { profiles: Record<string, string>; cliproxy?: Record<string, unknown> };
-  try {
-    config = loadConfig();
-  } catch {
-    console.log(fail('Failed to load config'));
-    process.exit(1);
+  // Get available APIs based on config mode
+  let apis: string[];
+  if (isUnifiedMode()) {
+    const unifiedConfig = loadOrCreateUnifiedConfig();
+    apis = Object.keys(unifiedConfig.profiles);
+  } else {
+    const config = loadConfig();
+    apis = Object.keys(config.profiles);
   }
 
-  const apis = Object.keys(config.profiles);
   if (apis.length === 0) {
     console.log(warn('No API profiles to remove'));
     process.exit(0);
@@ -375,7 +680,7 @@ async function handleRemove(args: string[]): Promise<void> {
     });
   }
 
-  if (!(name in config.profiles)) {
+  if (!apis.includes(name)) {
     console.log(fail(`API '${name}' not found`));
     console.log('');
     console.log('Available APIs:');
@@ -383,13 +688,15 @@ async function handleRemove(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const settingsPath = config.profiles[name];
-  const expandedPath = path.join(getCcsDir(), `${name}.settings.json`);
-
   // Confirm deletion
   console.log('');
   console.log(`API '${color(name, 'command')}' will be removed.`);
-  console.log(`  Settings: ${settingsPath}`);
+  if (isUnifiedMode()) {
+    console.log('  Config: ~/.ccs/config.yaml');
+    console.log('  Secrets: ~/.ccs/secrets.yaml');
+  } else {
+    console.log(`  Settings: ~/.ccs/${name}.settings.json`);
+  }
   console.log('');
 
   const confirmed =
@@ -401,20 +708,32 @@ async function handleRemove(args: string[]): Promise<void> {
     process.exit(0);
   }
 
-  // Remove from config.json
-  delete config.profiles[name];
-  const configPath = getConfigPath();
-  const tempPath = configPath + '.tmp';
-  fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
-  fs.renameSync(tempPath, configPath);
+  try {
+    if (isUnifiedMode()) {
+      // Remove from unified config
+      removeApiProfileUnified(name);
+    } else {
+      // Remove from legacy config.json
+      const config = loadConfig();
+      delete config.profiles[name];
+      const configPath = getConfigPath();
+      const tempPath = configPath + '.tmp';
+      fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+      fs.renameSync(tempPath, configPath);
 
-  // Remove settings file if it exists
-  if (fs.existsSync(expandedPath)) {
-    fs.unlinkSync(expandedPath);
+      // Remove settings file if it exists
+      const expandedPath = path.join(getCcsDir(), `${name}.settings.json`);
+      if (fs.existsSync(expandedPath)) {
+        fs.unlinkSync(expandedPath);
+      }
+    }
+
+    console.log(ok(`API profile removed: ${name}`));
+    console.log('');
+  } catch (error) {
+    console.log(fail(`Failed to remove API profile: ${(error as Error).message}`));
+    process.exit(1);
   }
-
-  console.log(ok(`API profile removed: ${name}`));
-  console.log('');
 }
 
 /**

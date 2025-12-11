@@ -19,6 +19,22 @@ import {
   removeAccount as removeAccountFn,
 } from '../cliproxy/account-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
+// Unified config imports
+import {
+  hasUnifiedConfig,
+  loadUnifiedConfig,
+  saveUnifiedConfig,
+  getConfigFormat,
+} from '../config/unified-config-loader';
+import {
+  needsMigration,
+  migrate,
+  rollback,
+  getBackupDirectories,
+} from '../config/migration-manager';
+import { getProfileSecrets, setProfileSecrets } from '../config/secrets-manager';
+import { isUnifiedConfig } from '../config/unified-config-types';
+import { isSensitiveKey, maskSensitiveValue } from '../utils/sensitive-keys';
 
 export const apiRoutes = Router();
 
@@ -61,17 +77,34 @@ function isConfigured(profileName: string, config: Config): boolean {
   }
 }
 
+/** Model mapping for API profiles */
+interface ModelMapping {
+  model?: string;
+  opusModel?: string;
+  sonnetModel?: string;
+  haikuModel?: string;
+}
+
 /**
  * Helper: Create settings file for profile
  */
-function createSettingsFile(name: string, baseUrl: string, apiKey: string, model?: string): string {
+function createSettingsFile(
+  name: string,
+  baseUrl: string,
+  apiKey: string,
+  models: ModelMapping = {}
+): string {
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
+  const { model, opusModel, sonnetModel, haikuModel } = models;
 
   const settings: Settings = {
     env: {
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_AUTH_TOKEN: apiKey,
       ...(model && { ANTHROPIC_MODEL: model }),
+      ...(opusModel && { ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel }),
+      ...(sonnetModel && { ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel }),
+      ...(haikuModel && { ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel }),
     },
   };
 
@@ -84,7 +117,14 @@ function createSettingsFile(name: string, baseUrl: string, apiKey: string, model
  */
 function updateSettingsFile(
   name: string,
-  updates: { baseUrl?: string; apiKey?: string; model?: string }
+  updates: {
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    opusModel?: string;
+    sonnetModel?: string;
+    haikuModel?: string;
+  }
 ): void {
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
 
@@ -110,6 +150,34 @@ function updateSettingsFile(
       settings.env.ANTHROPIC_MODEL = updates.model;
     } else {
       delete settings.env.ANTHROPIC_MODEL;
+    }
+  }
+
+  // Handle model mapping fields
+  if (updates.opusModel !== undefined) {
+    settings.env = settings.env || {};
+    if (updates.opusModel) {
+      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = updates.opusModel;
+    } else {
+      delete settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+    }
+  }
+
+  if (updates.sonnetModel !== undefined) {
+    settings.env = settings.env || {};
+    if (updates.sonnetModel) {
+      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = updates.sonnetModel;
+    } else {
+      delete settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+    }
+  }
+
+  if (updates.haikuModel !== undefined) {
+    settings.env = settings.env || {};
+    if (updates.haikuModel) {
+      settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = updates.haikuModel;
+    } else {
+      delete settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
     }
   }
 
@@ -150,7 +218,7 @@ apiRoutes.get('/profiles', (_req: Request, res: Response) => {
  * POST /api/profiles - Create new profile
  */
 apiRoutes.post('/profiles', (req: Request, res: Response): void => {
-  const { name, baseUrl, apiKey, model } = req.body;
+  const { name, baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel } = req.body;
 
   if (!name || !baseUrl || !apiKey) {
     res.status(400).json({ error: 'Missing required fields: name, baseUrl, apiKey' });
@@ -169,8 +237,13 @@ apiRoutes.post('/profiles', (req: Request, res: Response): void => {
     fs.mkdirSync(getCcsDir(), { recursive: true });
   }
 
-  // Create settings file
-  const settingsPath = createSettingsFile(name, baseUrl, apiKey, model);
+  // Create settings file with model mapping
+  const settingsPath = createSettingsFile(name, baseUrl, apiKey, {
+    model,
+    opusModel,
+    sonnetModel,
+    haikuModel,
+  });
 
   // Update config
   config.profiles[name] = settingsPath;
@@ -184,7 +257,7 @@ apiRoutes.post('/profiles', (req: Request, res: Response): void => {
  */
 apiRoutes.put('/profiles/:name', (req: Request, res: Response): void => {
   const { name } = req.params;
-  const { baseUrl, apiKey, model } = req.body;
+  const { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel } = req.body;
 
   const config = readConfigSafe();
 
@@ -194,7 +267,7 @@ apiRoutes.put('/profiles/:name', (req: Request, res: Response): void => {
   }
 
   try {
-    updateSettingsFile(name, { baseUrl, apiKey, model });
+    updateSettingsFile(name, { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel });
     res.json({ name, updated: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -478,22 +551,10 @@ function maskApiKeys(settings: Settings): Settings {
   if (!settings.env) return settings;
 
   const masked = { ...settings, env: { ...settings.env } };
-  // Pattern-based matching for sensitive keys
-  const sensitivePatterns = [
-    /^ANTHROPIC_AUTH_TOKEN$/, // Exact match for Anthropic auth token
-    /_API_KEY$/, // Keys ending with _API_KEY
-    /_AUTH_TOKEN$/, // Keys ending with _AUTH_TOKEN
-    /^API_KEY$/, // Exact match for API_KEY
-    /^AUTH_TOKEN$/, // Exact match for AUTH_TOKEN
-  ];
 
   for (const key of Object.keys(masked.env)) {
-    if (sensitivePatterns.some((pattern) => pattern.test(key))) {
-      const value = masked.env[key];
-      if (value && value.length > 8) {
-        masked.env[key] =
-          value.slice(0, 4) + '*'.repeat(Math.max(0, value.length - 8)) + value.slice(-4);
-      }
+    if (isSensitiveKey(key)) {
+      masked.env[key] = maskSensitiveValue(masked.env[key]);
     }
   }
 
@@ -667,5 +728,298 @@ apiRoutes.post('/health/fix/:checkId', (req: Request, res: Response): void => {
     res.json({ success: true, message: result.message });
   } else {
     res.status(400).json({ success: false, message: result.message });
+  }
+});
+
+// ==================== Unified Config (Phase 5) ====================
+
+/**
+ * GET /api/config/format - Return current config format and migration status
+ */
+apiRoutes.get('/config/format', (_req: Request, res: Response) => {
+  res.json({
+    format: getConfigFormat(),
+    migrationNeeded: needsMigration(),
+    backups: getBackupDirectories(),
+  });
+});
+
+/**
+ * GET /api/config - Return unified config (excludes secrets)
+ */
+apiRoutes.get('/config', (_req: Request, res: Response): void => {
+  if (!hasUnifiedConfig()) {
+    res.status(400).json({ error: 'Unified config not enabled' });
+    return;
+  }
+
+  const config = loadUnifiedConfig();
+  if (!config) {
+    res.status(500).json({ error: 'Failed to load config' });
+    return;
+  }
+
+  res.json(config);
+});
+
+/**
+ * PUT /api/config - Update unified config
+ */
+apiRoutes.put('/config', (req: Request, res: Response): void => {
+  const config = req.body;
+
+  if (!isUnifiedConfig(config)) {
+    res.status(400).json({ error: 'Invalid config format' });
+    return;
+  }
+
+  try {
+    saveUnifiedConfig(config);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/config/migrate - Trigger migration from JSON to YAML
+ */
+apiRoutes.post('/config/migrate', async (req: Request, res: Response) => {
+  const dryRun = req.query.dryRun === 'true';
+  const result = await migrate(dryRun);
+  res.json(result);
+});
+
+/**
+ * POST /api/config/rollback - Rollback migration to JSON format
+ */
+apiRoutes.post('/config/rollback', async (req: Request, res: Response): Promise<void> => {
+  const { backupPath } = req.body;
+
+  if (!backupPath || typeof backupPath !== 'string') {
+    res.status(400).json({ error: 'Missing required field: backupPath' });
+    return;
+  }
+
+  const success = await rollback(backupPath);
+  res.json({ success });
+});
+
+/**
+ * PUT /api/secrets/:profile - Update profile secrets (write-only)
+ */
+apiRoutes.put('/secrets/:profile', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const secrets = req.body;
+
+  if (!secrets || typeof secrets !== 'object') {
+    res.status(400).json({ error: 'Invalid secrets format' });
+    return;
+  }
+
+  try {
+    setProfileSecrets(profile, secrets as Record<string, string>);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * GET /api/secrets/:profile/exists - Check if secrets exist (no values returned)
+ */
+apiRoutes.get('/secrets/:profile/exists', (req: Request, res: Response) => {
+  const { profile } = req.params;
+  const secrets = getProfileSecrets(profile);
+  res.json({
+    exists: Object.keys(secrets).length > 0,
+    keys: Object.keys(secrets), // Only key names, not values
+  });
+});
+
+// ==================== Generic File API (Issue #73) ====================
+
+/**
+ * Security: Validate file path is within allowed directories
+ * - ~/.ccs/ directory: read/write allowed
+ * - ~/.claude/settings.json: read-only
+ */
+function validateFilePath(filePath: string): { valid: boolean; readonly: boolean; error?: string } {
+  const expandedPath = expandPath(filePath);
+  const normalizedPath = path.normalize(expandedPath);
+  const ccsDir = getCcsDir();
+  const claudeSettingsPath = expandPath('~/.claude/settings.json');
+
+  // Check if path is within ~/.ccs/
+  if (normalizedPath.startsWith(ccsDir)) {
+    // Block access to sensitive subdirectories
+    const relativePath = normalizedPath.slice(ccsDir.length);
+    if (relativePath.includes('/.git/') || relativePath.includes('/node_modules/')) {
+      return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+    }
+    return { valid: true, readonly: false };
+  }
+
+  // Allow read-only access to ~/.claude/settings.json
+  if (normalizedPath === claudeSettingsPath) {
+    return { valid: true, readonly: true };
+  }
+
+  return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+}
+
+/**
+ * GET /api/file - Read a file with path validation
+ * Query params: path (required)
+ * Returns: { content: string, mtime: number, readonly: boolean, path: string }
+ */
+apiRoutes.get('/file', (req: Request, res: Response): void => {
+  const filePath = req.query.path as string;
+
+  if (!filePath) {
+    res.status(400).json({ error: 'Missing required query parameter: path' });
+    return;
+  }
+
+  const validation = validateFilePath(filePath);
+  if (!validation.valid) {
+    res.status(403).json({ error: validation.error });
+    return;
+  }
+
+  const expandedPath = expandPath(filePath);
+
+  if (!fs.existsSync(expandedPath)) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  try {
+    const stat = fs.statSync(expandedPath);
+    const content = fs.readFileSync(expandedPath, 'utf8');
+
+    res.json({
+      content,
+      mtime: stat.mtime.getTime(),
+      readonly: validation.readonly,
+      path: expandedPath,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/file - Write a file with conflict detection and backup
+ * Query params: path (required)
+ * Body: { content: string, expectedMtime?: number }
+ * Returns: { success: true, mtime: number, backupPath?: string }
+ */
+apiRoutes.put('/file', (req: Request, res: Response): void => {
+  const filePath = req.query.path as string;
+  const { content, expectedMtime } = req.body;
+
+  if (!filePath) {
+    res.status(400).json({ error: 'Missing required query parameter: path' });
+    return;
+  }
+
+  if (typeof content !== 'string') {
+    res.status(400).json({ error: 'Missing required field: content' });
+    return;
+  }
+
+  const validation = validateFilePath(filePath);
+  if (!validation.valid) {
+    res.status(403).json({ error: validation.error });
+    return;
+  }
+
+  if (validation.readonly) {
+    res.status(403).json({ error: 'File is read-only' });
+    return;
+  }
+
+  const expandedPath = expandPath(filePath);
+  const ccsDir = getCcsDir();
+
+  // Conflict detection (if file exists and expectedMtime provided)
+  if (fs.existsSync(expandedPath) && expectedMtime !== undefined) {
+    const stat = fs.statSync(expandedPath);
+    if (stat.mtime.getTime() !== expectedMtime) {
+      res.status(409).json({
+        error: 'File modified externally',
+        currentMtime: stat.mtime.getTime(),
+      });
+      return;
+    }
+  }
+
+  try {
+    // Create backup if file exists
+    let backupPath: string | undefined;
+    if (fs.existsSync(expandedPath)) {
+      const backupDir = path.join(ccsDir, 'backups');
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+      const filename = path.basename(expandedPath);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      backupPath = path.join(backupDir, `${filename}.${timestamp}.bak`);
+      fs.copyFileSync(expandedPath, backupPath);
+    }
+
+    // Ensure parent directory exists
+    const parentDir = path.dirname(expandedPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
+    // Write atomically
+    const tempPath = expandedPath + '.tmp';
+    fs.writeFileSync(tempPath, content);
+    fs.renameSync(tempPath, expandedPath);
+
+    const newStat = fs.statSync(expandedPath);
+    res.json({
+      success: true,
+      mtime: newStat.mtime.getTime(),
+      backupPath,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/files - List editable files in ~/.ccs/
+ * Returns: { files: Array<{ name: string, path: string, mtime: number }> }
+ */
+apiRoutes.get('/files', (_req: Request, res: Response): void => {
+  const ccsDir = getCcsDir();
+
+  if (!fs.existsSync(ccsDir)) {
+    res.json({ files: [] });
+    return;
+  }
+
+  try {
+    const entries = fs.readdirSync(ccsDir, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => {
+        const filePath = path.join(ccsDir, entry.name);
+        const stat = fs.statSync(filePath);
+        return {
+          name: entry.name,
+          path: `~/.ccs/${entry.name}`,
+          mtime: stat.mtime.getTime(),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ files });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
   }
 });
