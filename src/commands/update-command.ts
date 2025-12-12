@@ -235,6 +235,7 @@ async function performNpmUpdate(
   const performUpdate = (): void => {
     const child = spawn(updateCommand, updateArgs, {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
     });
 
     child.on('exit', (code) => {
@@ -270,6 +271,7 @@ async function performNpmUpdate(
     console.log(info('Clearing package cache...'));
     const cacheChild = spawn(cacheCommand, cacheArgs, {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
     });
 
     cacheChild.on('exit', (code) => {
