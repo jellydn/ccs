@@ -236,8 +236,13 @@ async function performNpmUpdate(
 
   const performUpdate = (): void => {
     // On Windows, use shell with full command string to avoid deprecation warning
+    // Also suppress Node deprecation warnings that may come from package managers
     const child = isWindows
-      ? spawn(`${updateCommand} ${updateArgs.join(' ')}`, [], { stdio: 'inherit', shell: true })
+      ? spawn(`${updateCommand} ${updateArgs.join(' ')}`, [], {
+          stdio: 'inherit',
+          shell: true,
+          env: { ...process.env, NODE_NO_WARNINGS: '1' },
+        })
       : spawn(updateCommand, updateArgs, { stdio: 'inherit' });
 
     child.on('exit', (code) => {
@@ -273,7 +278,11 @@ async function performNpmUpdate(
     console.log(info('Clearing package cache...'));
     // On Windows, use shell with full command string to avoid deprecation warning
     const cacheChild = isWindows
-      ? spawn(`${cacheCommand} ${cacheArgs.join(' ')}`, [], { stdio: 'inherit', shell: true })
+      ? spawn(`${cacheCommand} ${cacheArgs.join(' ')}`, [], {
+          stdio: 'inherit',
+          shell: true,
+          env: { ...process.env, NODE_NO_WARNINGS: '1' },
+        })
       : spawn(cacheCommand, cacheArgs, { stdio: 'inherit' });
 
     cacheChild.on('exit', (code) => {
