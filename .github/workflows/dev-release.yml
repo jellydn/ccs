@@ -99,7 +99,7 @@ jobs:
 
       - name: Tag resolved issues
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new }}"
 
@@ -132,27 +132,20 @@ jobs:
 
           for ISSUE in $ISSUES; do
             NUM=${ISSUE#\#}
+
+            # Skip if already tagged (avoid spam)
+            if gh issue view "$NUM" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' | grep -q "released-dev"; then
+              echo "Issue #$NUM already has released-dev label, skipping"
+              continue
+            fi
+
             echo "Tagging issue #$NUM as released-dev"
 
-            # Add comment (using printf to handle newlines safely)
-            COMMENT=":test_tube: This fix is available for testing in version \\\`$NEW_VERSION\\\`
+            # Add comment
+            gh issue comment "$NUM" --repo "${{ github.repository }}" --body ":test_tube: Available in \`$NEW_VERSION\`. Install: \`npm i @kaitranntt/ccs@dev\`" || true
 
-          Install with:
-          \\\`\\\`\\\`bash
-          npm install @kaitranntt/ccs@dev
-          \\\`\\\`\\\`
-
-          Please test and confirm the fix works as expected."
-            gh issue comment "$NUM" --repo "${{ github.repository }}" --body "$COMMENT" || true
-
-            # Add released-dev label, remove pending-release if present
-            gh issue edit $NUM \
-              --add-label "released-dev" \
-              --remove-label "pending-release" \
-              --repo ${{ github.repository }} 2>/dev/null || \
-            gh issue edit $NUM \
-              --add-label "released-dev" \
-              --repo ${{ github.repository }} || true
+            # Add released-dev label
+            gh issue edit "$NUM" --add-label "released-dev" --repo "${{ github.repository }}" || true
           done
 
       - name: Commit version bump
