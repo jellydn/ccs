@@ -1,3 +1,19 @@
+# [5.18.0](https://github.com/kaitranntt/ccs/compare/v5.17.0...v5.18.0) (2025-12-13)
+
+
+### Bug Fixes
+
+* **analytics:** fill hourly gaps with zero values in 24H view ([4412d22](https://github.com/kaitranntt/ccs/commit/4412d22f3eee8f0b664f9fdad3562cb414aacacf))
+* **analytics:** guard against undefined data arrays in filtering ([e08935b](https://github.com/kaitranntt/ccs/commit/e08935b411caec21abc1bd795f6af8a889687f03))
+* **analytics:** use UTC dates and cap hourly chart at current time ([9fd0c1c](https://github.com/kaitranntt/ccs/commit/9fd0c1cc074c2d14b6978aba001b3b6552b06642))
+
+
+### Features
+
+* **ui:** implement operational hub core components ([a2d049c](https://github.com/kaitranntt/ccs/commit/a2d049c6045ab18a732171cd852b6c116f80e46f))
+* **ui:** premium home page with gradient glass design ([dbc1371](https://github.com/kaitranntt/ccs/commit/dbc13718ef4d194795fe1370aab005d971f96af0))
+* **ui:** redesign home page as Interactive Status Board ([cf567bb](https://github.com/kaitranntt/ccs/commit/cf567bb9246c50de446c47f426c4ad8790ee928c))
+
 # [5.17.0](https://github.com/kaitranntt/ccs/compare/v5.16.0...v5.17.0) (2025-12-12)
 
 
