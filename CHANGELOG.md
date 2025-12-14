@@ -1,3 +1,10 @@
+## [5.19.1](https://github.com/kaitranntt/ccs/compare/v5.19.0...v5.19.1) (2025-12-14)
+
+
+### Bug Fixes
+
+* **auth:** include unified config accounts in auth list command ([3cdf84b](https://github.com/kaitranntt/ccs/commit/3cdf84b1ba232ec6e68a40cf90558afeee21154e))
+
 # [5.19.0](https://github.com/kaitranntt/ccs/compare/v5.18.0...v5.19.0) (2025-12-14)
 
 
