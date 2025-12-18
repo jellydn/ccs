@@ -27,7 +27,7 @@ import {
   SelectGroup,
   SelectLabel,
 } from '@/components/ui/select';
-import { useCopilot } from '@/hooks/use-copilot';
+import { useCopilot, type CopilotModel, type CopilotPlanTier } from '@/hooks/use-copilot';
 import { Loader2, Save, Code2, X, Info, RefreshCw, Sparkles, Zap, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -38,27 +38,74 @@ const CodeEditor = lazy(() =>
 );
 
 // Model presets for quick configuration
-const MODEL_PRESETS = [
+// Grouped by tier: Free (available to all) and Paid (requires Pro+)
+const FREE_PRESETS = [
+  {
+    name: 'GPT-4.1 (Free)',
+    description: 'Free tier - no premium usage',
+    default: 'gpt-4.1',
+    opus: 'gpt-4.1',
+    sonnet: 'gpt-4.1',
+    haiku: 'gpt-4.1',
+  },
+  {
+    name: 'GPT-5 Mini (Free)',
+    description: 'Free tier - lightweight model',
+    default: 'gpt-5-mini',
+    opus: 'gpt-5-mini',
+    sonnet: 'gpt-5-mini',
+    haiku: 'gpt-5-mini',
+  },
+  {
+    name: 'Claude Haiku 4.5 (Free)',
+    description: 'Free tier - fast Anthropic model',
+    default: 'claude-haiku-4.5',
+    opus: 'claude-haiku-4.5',
+    sonnet: 'claude-haiku-4.5',
+    haiku: 'claude-haiku-4.5',
+  },
+];
+
+const PAID_PRESETS = [
   {
     name: 'Claude Opus 4.5',
-    default: 'claude-opus-4-5-20250514',
-    opus: 'claude-opus-4-5-20250514',
-    sonnet: 'claude-sonnet-4-20250514',
-    haiku: 'claude-haiku-3-5-20250514',
+    description: 'Pro+ (3x) - Most capable reasoning',
+    default: 'claude-opus-4.5',
+    opus: 'claude-opus-4.5',
+    sonnet: 'claude-sonnet-4.5',
+    haiku: 'claude-haiku-4.5',
   },
   {
-    name: 'Claude Sonnet 4',
-    default: 'claude-sonnet-4-20250514',
-    opus: 'claude-sonnet-4-20250514',
-    sonnet: 'claude-sonnet-4-20250514',
-    haiku: 'claude-haiku-3-5-20250514',
+    name: 'Claude Sonnet 4.5',
+    description: 'Pro+ (1x) - Balanced performance',
+    default: 'claude-sonnet-4.5',
+    opus: 'claude-opus-4.5',
+    sonnet: 'claude-sonnet-4.5',
+    haiku: 'claude-haiku-4.5',
   },
   {
-    name: 'GPT-4o',
-    default: 'gpt-4o',
-    opus: 'gpt-4o',
-    sonnet: 'gpt-4o',
-    haiku: 'gpt-4o-mini',
+    name: 'GPT-5.2',
+    description: 'Pro+ (1x) - Latest OpenAI (Preview)',
+    default: 'gpt-5.2',
+    opus: 'gpt-5.2',
+    sonnet: 'gpt-5.1',
+    haiku: 'gpt-5-mini',
+  },
+  {
+    name: 'GPT-5.1 Codex Max',
+    description: 'Pro+ (1x) - Best for coding',
+    default: 'gpt-5.1-codex-max',
+    opus: 'gpt-5.1-codex-max',
+    sonnet: 'gpt-5.1-codex',
+    haiku: 'gpt-5.1-codex-mini',
+  },
+  {
+    name: 'Gemini 2.5 Pro',
+    description: 'Pro+ (1x) - Google latest',
+    default: 'gemini-2.5-pro',
+    opus: 'gemini-2.5-pro',
+    sonnet: 'gemini-2.5-pro',
+    haiku: 'gemini-3-flash',
   },
 ];
 
@@ -67,8 +114,35 @@ interface FlexibleModelSelectorProps {
   description?: string;
   value: string | undefined;
   onChange: (model: string) => void;
-  models: { id: string }[];
+  models: CopilotModel[];
   disabled?: boolean;
+}
+
+/** Get badge style for plan tier */
+function getPlanBadgeStyle(plan?: CopilotPlanTier): string {
+  switch (plan) {
+    case 'free':
+      return 'bg-green-100 text-green-700 border-green-200';
+    case 'pro':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'pro+':
+      return 'bg-purple-100 text-purple-700 border-purple-200';
+    case 'business':
+      return 'bg-orange-100 text-orange-700 border-orange-200';
+    case 'enterprise':
+      return 'bg-red-100 text-red-700 border-red-200';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+}
+
+/** Get multiplier display */
+function getMultiplierDisplay(multiplier?: number): string | null {
+  if (multiplier === undefined || multiplier === null) return null;
+  if (multiplier === 0) return 'Free';
+  if (multiplier < 1) return `${multiplier}x`;
+  if (multiplier === 1) return '1x';
+  return `${multiplier}x`;
 }
 
 function FlexibleModelSelector({
@@ -79,6 +153,9 @@ function FlexibleModelSelector({
   models,
   disabled,
 }: FlexibleModelSelectorProps) {
+  // Find current model for display
+  const currentModel = models.find((m) => m.id === value);
+
   return (
     <div className="space-y-1.5">
       <div>
@@ -88,7 +165,19 @@ function FlexibleModelSelector({
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-9">
           <SelectValue placeholder="Select model">
-            {value && <span className="truncate font-mono text-xs">{value}</span>}
+            {value && (
+              <div className="flex items-center gap-2">
+                <span className="truncate font-mono text-xs">{value}</span>
+                {currentModel?.minPlan && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] px-1 py-0 h-4 ${getPlanBadgeStyle(currentModel.minPlan)}`}
+                  >
+                    {currentModel.minPlan}
+                  </Badge>
+                )}
+              </div>
+            )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent className="max-h-[300px]">
@@ -99,7 +188,25 @@ function FlexibleModelSelector({
             {models.map((model) => (
               <SelectItem key={model.id} value={model.id}>
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-mono text-xs">{model.id}</span>
+                  <span className="truncate font-mono text-xs">{model.name || model.id}</span>
+                  {model.minPlan && (
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] px-1 py-0 h-4 ${getPlanBadgeStyle(model.minPlan)}`}
+                    >
+                      {model.minPlan}
+                    </Badge>
+                  )}
+                  {model.multiplier !== undefined && (
+                    <span className="text-[9px] text-muted-foreground">
+                      {getMultiplierDisplay(model.multiplier)}
+                    </span>
+                  )}
+                  {model.preview && (
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                      Preview
+                    </Badge>
+                  )}
                   {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
                 </div>
               </SelectItem>
@@ -164,7 +271,7 @@ export function CopilotConfigForm() {
   };
 
   // Batch update for presets
-  const applyPreset = (preset: (typeof MODEL_PRESETS)[0]) => {
+  const applyPreset = (preset: (typeof FREE_PRESETS)[0] | (typeof PAID_PRESETS)[0]) => {
     setLocalOverrides((prev) => ({
       ...prev,
       model: preset.default,
@@ -300,19 +407,65 @@ export function CopilotConfigForm() {
                   <p className="text-xs text-muted-foreground mb-3">
                     Apply pre-configured model mappings
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {MODEL_PRESETS.map((preset) => (
-                      <Button
-                        key={preset.name}
+
+                  {/* Free Tier Presets */}
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        className="text-xs h-7 gap-1"
-                        onClick={() => applyPreset(preset)}
+                        className="text-[10px] bg-green-100 text-green-700 border-green-200"
                       >
-                        <Zap className="w-3 h-3" />
-                        {preset.name}
-                      </Button>
-                    ))}
+                        Free Tier
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        No premium usage count
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {FREE_PRESETS.map((preset) => (
+                        <Button
+                          key={preset.name}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 gap-1"
+                          onClick={() => applyPreset(preset)}
+                          title={preset.description}
+                        >
+                          <Zap className="w-3 h-3 text-green-600" />
+                          {preset.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paid Tier Presets */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-blue-100 text-blue-700 border-blue-200"
+                      >
+                        Pro+ Required
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        Uses premium request quota
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {PAID_PRESETS.map((preset) => (
+                        <Button
+                          key={preset.name}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 gap-1"
+                          onClick={() => applyPreset(preset)}
+                          title={preset.description}
+                        >
+                          <Zap className="w-3 h-3" />
+                          {preset.name}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

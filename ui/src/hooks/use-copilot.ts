@@ -51,12 +51,21 @@ export interface CopilotConfig {
   haiku_model?: string;
 }
 
+/** GitHub Copilot plan tiers */
+export type CopilotPlanTier = 'free' | 'pro' | 'pro+' | 'business' | 'enterprise';
+
 export interface CopilotModel {
   id: string;
   name: string;
   provider: 'openai' | 'anthropic';
   isDefault?: boolean;
   isCurrent?: boolean;
+  /** Minimum plan tier required (free = available to all) */
+  minPlan?: CopilotPlanTier;
+  /** Premium request multiplier (0 = free, higher = more expensive) */
+  multiplier?: number;
+  /** Whether this model is in preview */
+  preview?: boolean;
 }
 
 export interface CopilotRawSettings {
