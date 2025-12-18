@@ -1295,12 +1295,34 @@ apiRoutes.get('/cliproxy/status', async (_req: Request, res: Response): Promise<
 /**
  * GET /api/cliproxy/proxy-status - Get detailed proxy process status
  * Returns: { running, port?, pid?, sessionCount?, startedAt? }
- * Uses session tracker for accurate multi-session status
+ * Combines session tracker data with actual port check for accuracy
  */
-apiRoutes.get('/cliproxy/proxy-status', (_req: Request, res: Response): void => {
+apiRoutes.get('/cliproxy/proxy-status', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const status = getProxyProcessStatus();
-    res.json(status);
+    // First check session tracker for detailed info
+    const sessionStatus = getProxyProcessStatus();
+
+    // If session tracker says running, trust it
+    if (sessionStatus.running) {
+      res.json(sessionStatus);
+      return;
+    }
+
+    // Session tracker says not running, but proxy might be running without session tracking
+    // (e.g., started before session persistence was implemented)
+    const actuallyRunning = await isCliproxyRunning();
+
+    if (actuallyRunning) {
+      // Proxy running but no session lock - legacy/untracked instance
+      res.json({
+        running: true,
+        port: 8317, // Default port
+        sessionCount: 0, // Unknown sessions
+        // No pid/startedAt since we don't have session lock
+      });
+    } else {
+      res.json(sessionStatus);
+    }
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
