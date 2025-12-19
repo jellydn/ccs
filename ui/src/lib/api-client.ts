@@ -182,6 +182,14 @@ export interface ProxyStartResult {
   error?: string;
 }
 
+/** Result from stopping proxy service */
+export interface ProxyStopResult {
+  stopped: boolean;
+  pid?: number;
+  sessionCount?: number;
+  error?: string;
+}
+
 // API
 export const api = {
   profiles: {
@@ -216,6 +224,7 @@ export const api = {
     // Proxy process status and control
     proxyStatus: () => request<ProxyProcessStatus>('/cliproxy/proxy-status'),
     proxyStart: () => request<ProxyStartResult>('/cliproxy/proxy-start', { method: 'POST' }),
+    proxyStop: () => request<ProxyStopResult>('/cliproxy/proxy-stop', { method: 'POST' }),
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),

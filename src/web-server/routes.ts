@@ -44,7 +44,7 @@ import {
 } from '../cliproxy/account-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
 import { getClaudeEnvVars } from '../cliproxy/config-generator';
-import { getProxyStatus as getProxyProcessStatus } from '../cliproxy/session-tracker';
+import { getProxyStatus as getProxyProcessStatus, stopProxy } from '../cliproxy/session-tracker';
 import { ensureCliproxyService } from '../cliproxy/service-manager';
 // Unified config imports
 import {
@@ -1383,6 +1383,19 @@ apiRoutes.get('/cliproxy/proxy-status', async (_req: Request, res: Response): Pr
 apiRoutes.post('/cliproxy/proxy-start', async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await ensureCliproxyService();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/cliproxy/proxy-stop - Stop the CLIProxy service
+ * Returns: { stopped, pid?, sessionCount?, error? }
+ */
+apiRoutes.post('/cliproxy/proxy-stop', (_req: Request, res: Response): void => {
+  try {
+    const result = stopProxy();
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

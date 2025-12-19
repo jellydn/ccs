@@ -240,3 +240,24 @@ export function useStartProxy() {
     },
   });
 }
+
+export function useStopProxy() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.cliproxy.proxyStop(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['proxy-status'] });
+      if (data.stopped) {
+        toast.success(
+          `CLIProxy stopped${data.sessionCount ? ` (${data.sessionCount} session(s) disconnected)` : ''}`
+        );
+      } else {
+        toast.error(data.error || 'Failed to stop CLIProxy');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}

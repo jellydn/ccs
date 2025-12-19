@@ -1,13 +1,13 @@
 /**
  * Proxy Status Widget
  *
- * Displays CLIProxy process status with start button for recovery.
+ * Displays CLIProxy process status with start/stop/restart controls.
  * Shows: running state, port, session count, uptime.
  */
 
-import { Activity, Power, RefreshCw, Clock, Users } from 'lucide-react';
+import { Activity, Power, RefreshCw, Clock, Users, Square, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useProxyStatus, useStartProxy } from '@/hooks/use-cliproxy';
+import { useProxyStatus, useStartProxy, useStopProxy } from '@/hooks/use-cliproxy';
 import { cn } from '@/lib/utils';
 
 function formatUptime(startedAt?: string): string {
@@ -28,8 +28,18 @@ function formatUptime(startedAt?: string): string {
 export function ProxyStatusWidget() {
   const { data: status, isLoading } = useProxyStatus();
   const startProxy = useStartProxy();
+  const stopProxy = useStopProxy();
 
   const isRunning = status?.running ?? false;
+  const isActioning = startProxy.isPending || stopProxy.isPending;
+
+  // Restart = stop then start
+  const handleRestart = async () => {
+    await stopProxy.mutateAsync();
+    // Small delay to ensure port is released
+    await new Promise((r) => setTimeout(r, 500));
+    startProxy.mutate();
+  };
 
   return (
     <div
@@ -61,21 +71,56 @@ export function ProxyStatusWidget() {
       </div>
 
       {isRunning && status ? (
-        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">Port {status.port}</span>
-          {status.sessionCount !== undefined && status.sessionCount > 0 && (
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              {status.sessionCount} session{status.sessionCount !== 1 ? 's' : ''}
-            </span>
-          )}
-          {status.startedAt && (
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formatUptime(status.startedAt)}
-            </span>
-          )}
-        </div>
+        <>
+          <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">Port {status.port}</span>
+            {status.sessionCount !== undefined && status.sessionCount > 0 && (
+              <span className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {status.sessionCount} session{status.sessionCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {status.startedAt && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formatUptime(status.startedAt)}
+              </span>
+            )}
+          </div>
+          {/* Control buttons when running */}
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 flex-1"
+              onClick={handleRestart}
+              disabled={isActioning}
+              title="Restart to apply updates"
+            >
+              {isActioning ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <RotateCw className="w-3 h-3" />
+              )}
+              Restart
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+              onClick={() => stopProxy.mutate()}
+              disabled={isActioning}
+              title="Stop CLIProxy service"
+            >
+              {stopProxy.isPending ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <Square className="w-3 h-3" />
+              )}
+              Stop
+            </Button>
+          </div>
+        </>
       ) : (
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Not running</span>
