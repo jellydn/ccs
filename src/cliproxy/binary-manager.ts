@@ -19,7 +19,8 @@ import * as crypto from 'crypto';
 import * as zlib from 'zlib';
 import { ProgressIndicator } from '../utils/progress-indicator';
 import { ok, info } from '../utils/ui';
-import { getBinDir, getCliproxyDir } from './config-generator';
+import { getBinDir, getCliproxyDir, CLIPROXY_DEFAULT_PORT } from './config-generator';
+import { isCliproxyRunning } from './stats-fetcher';
 import {
   BinaryInfo,
   BinaryManagerConfig,
@@ -103,17 +104,31 @@ export class BinaryManager {
       try {
         const updateResult = await this.checkForUpdates();
         if (updateResult.hasUpdate) {
-          console.log(
-            info(
-              `CLIProxyAPI update available: v${updateResult.currentVersion} -> v${updateResult.latestVersion}`
-            )
-          );
-          console.log(info('Updating CLIProxyAPI...'));
+          // Check if CLIProxyAPI is currently running - can't update while running
+          const proxyRunning = await isCliproxyRunning(CLIPROXY_DEFAULT_PORT);
+          if (proxyRunning) {
+            // Proxy is running - can't update, just notify user
+            console.log(
+              info(
+                `CLIProxyAPI update available: v${updateResult.currentVersion} -> v${updateResult.latestVersion}`
+              )
+            );
+            console.log(info('Run "ccs cliproxy stop" then restart to apply update'));
+            this.log('Skipping update: CLIProxyAPI is currently running');
+          } else {
+            // Proxy not running - safe to update
+            console.log(
+              info(
+                `CLIProxyAPI update available: v${updateResult.currentVersion} -> v${updateResult.latestVersion}`
+              )
+            );
+            console.log(info('Updating CLIProxyAPI...'));
 
-          // Delete old binary and download new version
-          this.deleteBinary();
-          this.config.version = updateResult.latestVersion;
-          await this.downloadAndInstall();
+            // Delete old binary and download new version
+            this.deleteBinary();
+            this.config.version = updateResult.latestVersion;
+            await this.downloadAndInstall();
+          }
         }
       } catch (error) {
         // Silent fail - don't block startup if update check fails
