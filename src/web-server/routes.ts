@@ -781,6 +781,7 @@ apiRoutes.get('/settings/:profile/raw', (req: Request, res: Response): void => {
 
 /**
  * PUT /api/settings/:profile - Update settings with conflict detection and backup
+ * Creates the settings file if it doesn't exist (upsert behavior)
  */
 apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
   const { profile } = req.params;
@@ -788,29 +789,36 @@ apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
   const ccsDir = getCcsDir();
   const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
 
-  if (!fs.existsSync(settingsPath)) {
-    res.status(404).json({ error: 'Settings not found' });
-    return;
+  const fileExists = fs.existsSync(settingsPath);
+
+  // Only check conflict if file exists and expectedMtime was provided
+  if (fileExists && expectedMtime) {
+    const stat = fs.statSync(settingsPath);
+    if (stat.mtime.getTime() !== expectedMtime) {
+      res.status(409).json({
+        error: 'File modified externally',
+        currentMtime: stat.mtime.getTime(),
+      });
+      return;
+    }
   }
 
-  // Conflict detection
-  const stat = fs.statSync(settingsPath);
-  if (expectedMtime && stat.mtime.getTime() !== expectedMtime) {
-    res.status(409).json({
-      error: 'File modified externally',
-      currentMtime: stat.mtime.getTime(),
-    });
-    return;
+  // Create backup only if file exists
+  let backupPath: string | undefined;
+  if (fileExists) {
+    const backupDir = path.join(ccsDir, 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
+    fs.copyFileSync(settingsPath, backupPath);
   }
 
-  // Create backup
-  const backupDir = path.join(ccsDir, 'backups');
-  if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
+  // Ensure directory exists for new files
+  if (!fileExists) {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   }
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
-  fs.copyFileSync(settingsPath, backupPath);
 
   // Write new settings atomically
   const tempPath = settingsPath + '.tmp';
@@ -822,6 +830,7 @@ apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
     profile,
     mtime: newStat.mtime.getTime(),
     backupPath,
+    created: !fileExists,
   });
 });
 
