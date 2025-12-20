@@ -44,7 +44,7 @@ const navGroups = [
   {
     title: 'Identity & Access',
     items: [
-      { path: '/api', icon: Key, label: 'API Profiles' },
+      { path: '/providers', icon: Key, label: 'API Profiles' },
       {
         path: '/cliproxy',
         icon: Zap,
