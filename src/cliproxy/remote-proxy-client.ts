@@ -48,9 +48,10 @@ const DEFAULT_TIMEOUT_MS = 2000;
 
 /**
  * Get default port for protocol
+ * HTTP defaults to 8317 (CLIProxyAPI default), HTTPS to 443 (standard SSL)
  */
 function getDefaultPort(protocol: 'http' | 'https'): number {
-  return protocol === 'https' ? 443 : 80;
+  return protocol === 'https' ? 443 : 8317;
 }
 
 /**
@@ -139,6 +140,9 @@ function createHttpsAgent(allowSelfSigned: boolean): https.Agent | undefined {
 /**
  * Check health of remote CLIProxyAPI instance
  *
+ * Uses /v1/models endpoint for health check since CLIProxyAPI doesn't expose /health.
+ * This endpoint is always available and returns 200 when the server is operational.
+ *
  * @param config Remote proxy client configuration
  * @returns RemoteProxyStatus with reachability and latency
  */
@@ -157,8 +161,8 @@ export async function checkRemoteProxy(
     };
   }
 
-  // Use smart URL building - omit port if it's the default for the protocol
-  const url = buildProxyUrl(host, port, protocol, '/health');
+  // Use /v1/models as health check - CLIProxyAPI doesn't have /health endpoint
+  const url = buildProxyUrl(host, port, protocol, '/v1/models');
   const startTime = Date.now();
 
   try {
