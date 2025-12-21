@@ -3,6 +3,8 @@
  * Pre-configured templates for common API providers
  */
 
+export type PresetCategory = 'recommended' | 'alternative';
+
 export interface ProviderPreset {
   id: string;
   name: string;
@@ -16,11 +18,13 @@ export interface ProviderPreset {
   requiresApiKey: boolean;
   apiKeyPlaceholder: string;
   apiKeyHint?: string;
+  category: PresetCategory;
 }
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
+  // Recommended - OpenRouter
   {
     id: 'openrouter',
     name: 'OpenRouter',
@@ -34,18 +38,21 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     requiresApiKey: true,
     apiKeyPlaceholder: 'sk-or-...',
     apiKeyHint: 'Get your API key at openrouter.ai/keys',
+    category: 'recommended',
   },
+  // Alternative providers - GLM/GLMT/Kimi
   {
     id: 'glm',
     name: 'GLM',
     description: 'Claude via Z.AI (GitHub Copilot)',
     baseUrl: 'https://api.z.ai/api/anthropic',
     defaultProfileName: 'glm',
-    badge: 'Free',
+    badge: 'Z.AI',
     defaultModel: 'glm-4.6',
     requiresApiKey: true,
     apiKeyPlaceholder: 'ghp_...',
     apiKeyHint: 'Get your API key from Z.AI',
+    category: 'alternative',
   },
   {
     id: 'glmt',
@@ -58,6 +65,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     requiresApiKey: true,
     apiKeyPlaceholder: 'ghp_...',
     apiKeyHint: 'Same API key as GLM',
+    category: 'alternative',
   },
   {
     id: 'kimi',
@@ -70,8 +78,14 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     requiresApiKey: true,
     apiKeyPlaceholder: 'sk-...',
     apiKeyHint: 'Get your API key from Moonshot AI',
+    category: 'alternative',
   },
 ];
+
+/** Get presets by category */
+export function getPresetsByCategory(category: PresetCategory): ProviderPreset[] {
+  return PROVIDER_PRESETS.filter((p) => p.category === category);
+}
 
 /** Get preset by ID */
 export function getPresetById(id: string): ProviderPreset | undefined {
