@@ -46,6 +46,7 @@ export interface RemoteAuthStatus {
 /** Map CLIProxyAPI provider names to CCS internal names */
 const PROVIDER_MAP: Record<string, string> = {
   gemini: 'gemini',
+  'gemini-cli': 'gemini', // CLIProxyAPI uses 'gemini-cli' for Gemini CLI auth
   antigravity: 'agy',
   codex: 'codex',
   qwen: 'qwen',
