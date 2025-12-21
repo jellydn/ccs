@@ -3,7 +3,7 @@
  * Hooks for accessing and updating settings context state
  */
 
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import { SettingsContext } from '../settings-context';
 import type {
   WebSearchConfig,
@@ -131,27 +131,52 @@ export function useSettingsActions() {
     [dispatch]
   );
 
-  return {
-    setWebSearchConfig,
-    setWebSearchStatus,
-    setWebSearchLoading,
-    setWebSearchStatusLoading,
-    setWebSearchSaving,
-    setWebSearchError,
-    setWebSearchSuccess,
-    setGlobalEnvConfig,
-    setGlobalEnvLoading,
-    setGlobalEnvSaving,
-    setGlobalEnvError,
-    setGlobalEnvSuccess,
-    setProxyConfig,
-    setProxyLoading,
-    setProxySaving,
-    setProxyError,
-    setProxySuccess,
-    setProxyTestResult,
-    setProxyTesting,
-    setRawConfig,
-    setRawConfigLoading,
-  };
+  return useMemo(
+    () => ({
+      setWebSearchConfig,
+      setWebSearchStatus,
+      setWebSearchLoading,
+      setWebSearchStatusLoading,
+      setWebSearchSaving,
+      setWebSearchError,
+      setWebSearchSuccess,
+      setGlobalEnvConfig,
+      setGlobalEnvLoading,
+      setGlobalEnvSaving,
+      setGlobalEnvError,
+      setGlobalEnvSuccess,
+      setProxyConfig,
+      setProxyLoading,
+      setProxySaving,
+      setProxyError,
+      setProxySuccess,
+      setProxyTestResult,
+      setProxyTesting,
+      setRawConfig,
+      setRawConfigLoading,
+    }),
+    [
+      setWebSearchConfig,
+      setWebSearchStatus,
+      setWebSearchLoading,
+      setWebSearchStatusLoading,
+      setWebSearchSaving,
+      setWebSearchError,
+      setWebSearchSuccess,
+      setGlobalEnvConfig,
+      setGlobalEnvLoading,
+      setGlobalEnvSaving,
+      setGlobalEnvError,
+      setGlobalEnvSuccess,
+      setProxyConfig,
+      setProxyLoading,
+      setProxySaving,
+      setProxyError,
+      setProxySuccess,
+      setProxyTestResult,
+      setProxyTesting,
+      setRawConfig,
+      setRawConfigLoading,
+    ]
+  );
 }
