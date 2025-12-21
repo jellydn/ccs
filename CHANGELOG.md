@@ -1,3 +1,20 @@
+## [7.1.0](https://github.com/kaitranntt/ccs/compare/v7.0.0...v7.1.0) (2025-12-21)
+
+### Features
+
+* **ui:** add visual feedback for WebSearch model auto-save ([eaf566b](https://github.com/kaitranntt/ccs/commit/eaf566beac65284d0809ca8a29f6ce2d03b79af8)), closes [#164](https://github.com/kaitranntt/ccs/issues/164)
+
+### Bug Fixes
+
+* **ci:** use commit-based changelog for dev release Discord notifications ([1129ec6](https://github.com/kaitranntt/ccs/commit/1129ec6ef570e7b922d2831c53bad83a68311b88))
+* **ui:** add unsaved changes confirmation when switching profiles ([b790005](https://github.com/kaitranntt/ccs/commit/b790005c85e9f25fd14a14ac01b79e7562f1a1ea)), closes [#163](https://github.com/kaitranntt/ccs/issues/163)
+* **ui:** fix profile switching and improve UX ([86d992f](https://github.com/kaitranntt/ccs/commit/86d992fce623a8378d5f53b1aff7b53d2f80e3c4))
+
+### Documentation
+
+* **readme:** add OpenRouter to built-in providers ([676929f](https://github.com/kaitranntt/ccs/commit/676929fc87c4cc450e3dc6e3f05ff60dfcead255))
+* **standards:** add input state persistence patterns ([53a7ba8](https://github.com/kaitranntt/ccs/commit/53a7ba8d3ffe81f87306e84357fce4f6ec9d7135)), closes [#165](https://github.com/kaitranntt/ccs/issues/165)
+
 ## [7.0.0](https://github.com/kaitranntt/ccs/compare/v6.7.1...v7.0.0) (2025-12-21)
 
 ### ⚠ BREAKING CHANGES
