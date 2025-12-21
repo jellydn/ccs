@@ -1,3 +1,64 @@
+## [7.0.0](https://github.com/kaitranntt/ccs/compare/v6.7.1...v7.0.0) (2025-12-21)
+
+### ⚠ BREAKING CHANGES
+
+* **install:** GLM/GLMT/Kimi profiles no longer auto-created
+
+- remove glm.settings.json auto-creation
+- remove glmt.settings.json auto-creation
+- remove kimi.settings.json auto-creation
+- config.json now starts with empty profiles
+- users create via: ccs api create --preset glm
+- or via UI: Profile Create Dialog → Provider Presets
+- existing profiles preserved for backward compatibility
+
+### Features
+
+* **api:** unify profile management with config-aware services ([4c74e92](https://github.com/kaitranntt/ccs/commit/4c74e92cc46afed9c8232944a2a443709b130a2c))
+* **cli:** add --preset option to ccs api create command ([418d121](https://github.com/kaitranntt/ccs/commit/418d121577098722a35b060a37388ea2d267dffd))
+* **cli:** add interactive OpenRouter model picker for api create ([d193626](https://github.com/kaitranntt/ccs/commit/d193626e3bfb8962809e2a6daf9697d302a70ff7))
+* **install:** remove auto-creation of GLM/GLMT/Kimi profiles ([f96116d](https://github.com/kaitranntt/ccs/commit/f96116d280d1addcaf5ea5ba5e605f8a3f058ad7))
+* **openrouter:** prioritize Exacto models for better agentic performance ([ebc8ee2](https://github.com/kaitranntt/ccs/commit/ebc8ee2638a10500c85f0af862f9d99589429b89))
+* **proxy:** improve remote proxy UX defaults ([116b6a1](https://github.com/kaitranntt/ccs/commit/116b6a15b0bf7db3a11fb428706dde126814004d))
+* **ui:** add dynamic newest models detection for OpenRouter ([a1cbd4d](https://github.com/kaitranntt/ccs/commit/a1cbd4d92397bc15a9cb627bda5cd360603a2bf5))
+* **ui:** add OpenRouter badge to API Profiles sidebar item ([a08aef9](https://github.com/kaitranntt/ccs/commit/a08aef9fb79c8cf8c1109414394da43d6e35db31))
+* **ui:** add OpenRouter model catalog core infrastructure ([80beb1d](https://github.com/kaitranntt/ccs/commit/80beb1dadafff283c713d8a7ae556e06a7935882))
+* **ui:** add OpenRouter model picker and tier mapping components ([3cd21bb](https://github.com/kaitranntt/ccs/commit/3cd21bb67b1e357992e662fe666bd35a4062de04))
+* **ui:** add provider preset categories with helper function ([10cfe0f](https://github.com/kaitranntt/ccs/commit/10cfe0fefad9892d1e6314122027dc05bea1a6bf))
+* **ui:** add provider presets and OpenRouter promo components ([9c90e1d](https://github.com/kaitranntt/ccs/commit/9c90e1dc2cdc8aa11bb82ae4b337f7fed2f4c373))
+* **ui:** add streamlined OpenRouter profile editor ([7788137](https://github.com/kaitranntt/ccs/commit/7788137f1c407854d7d8aa5c10c18fd98dbafa2f))
+* **ui:** add value input for new environment variables ([f947aeb](https://github.com/kaitranntt/ccs/commit/f947aeb21b0a3a73c8b401de263deb68c69769ce))
+* **ui:** integrate OpenRouter model picker into profile editor ([677f9d1](https://github.com/kaitranntt/ccs/commit/677f9d1e72990e51ed88e00b228369c8be520bbe))
+* **ui:** rewrite profile create dialog with provider presets ([adcc323](https://github.com/kaitranntt/ccs/commit/adcc3235f0fcd328f3729125e5c5988f9db0937d))
+
+### Bug Fixes
+
+* **ci:** use custom dev versioning to preserve stable version coupling ([dce4b36](https://github.com/kaitranntt/ccs/commit/dce4b36fc658cb1a692f44152002fe5e1e79f24f))
+* **cliproxy:** correct remote proxy URL building for default port ([294d8d5](https://github.com/kaitranntt/ccs/commit/294d8d55e517ce064601ec7fd54827da61e0d0f2))
+* **cliproxy:** improve remote proxy error messages ([55464c5](https://github.com/kaitranntt/ccs/commit/55464c5c5cb67b1cc4c2352130384dc6bc013f4c)), closes [#142](https://github.com/kaitranntt/ccs/issues/142)
+* **cliproxy:** use /v1/models for remote proxy health check ([5e1d290](https://github.com/kaitranntt/ccs/commit/5e1d290865876a7e002b1e6c3c2911e1ac7e49b2)), closes [#142](https://github.com/kaitranntt/ccs/issues/142)
+* **config:** add missing cliproxy_server section to YAML serialization ([b322203](https://github.com/kaitranntt/ccs/commit/b32220364eb3b023b6d62fd12a4cc4cd60da85e5))
+* **openrouter:** add ANTHROPIC_API_KEY="" default for OpenRouter profiles ([70bc44e](https://github.com/kaitranntt/ccs/commit/70bc44eb11a28ec3e338d9ef45d33d9beaac6873))
+* **openrouter:** correct ANTHROPIC_BASE_URL to https://openrouter.ai/api ([7d4961e](https://github.com/kaitranntt/ccs/commit/7d4961e7a955dd48075aae7e215b3f0aaf4367ef))
+* **openrouter:** show all env vars except API key in Additional Variables ([f41d361](https://github.com/kaitranntt/ccs/commit/f41d361fe547c0201b4d49c542391b4e5d96b93e))
+* **ui:** deduplicate API key and restore add variable input ([3f7add5](https://github.com/kaitranntt/ccs/commit/3f7add5c10be5485567e2462754c145e94c19d78))
+* **ui:** model selection now updates all tiers correctly ([723ce28](https://github.com/kaitranntt/ccs/commit/723ce284314272f05b0413c3f9fdd4bcdb298618))
+* **ui:** resolve Radix ScrollArea viewport overflow ([2b6600a](https://github.com/kaitranntt/ccs/commit/2b6600abd74d369dfd245b8f77c26786006e46cb))
+* **ui:** show OpenRouterQuickStart by default on API page ([05380e2](https://github.com/kaitranntt/ccs/commit/05380e21b435d09d0105bee3868d4c73028e558d))
+* **ui:** use current input values for test connection and persist across tabs ([12b534c](https://github.com/kaitranntt/ccs/commit/12b534cc495337f2c6e24884cde7d7296a34f380)), closes [#142](https://github.com/kaitranntt/ccs/issues/142) [#163](https://github.com/kaitranntt/ccs/issues/163) [#164](https://github.com/kaitranntt/ccs/issues/164) [#165](https://github.com/kaitranntt/ccs/issues/165)
+* **update:** correct dev version comparison semantic ([df77745](https://github.com/kaitranntt/ccs/commit/df77745eca747e6877c754f0002a4ba9fd50eb85))
+
+### Code Refactoring
+
+* **config:** remove secrets.yaml architecture ([4f4ab43](https://github.com/kaitranntt/ccs/commit/4f4ab43eb39576b5bd3dfc16ced306d0653e72f0))
+* **ui:** rename /api route to /providers ([9382278](https://github.com/kaitranntt/ccs/commit/93822787045188e3e006b8671ea5ae24f94459ce))
+* **ui:** reorganize profile create dialog with preset categories ([96310dd](https://github.com/kaitranntt/ccs/commit/96310dd1acd5d6265cd2d68d970b79409d988c1f))
+* **ui:** replace hardcoded orange colors with accent tokens ([b9f6823](https://github.com/kaitranntt/ccs/commit/b9f6823fc93c42f0f9af85750386149635428aa0))
+
+### Tests
+
+* **npm:** update tests for preset-based profile creation ([de45fa0](https://github.com/kaitranntt/ccs/commit/de45fa0da9d1345dff5871a71af7bbedb235076f))
+
 ## [6.8.0-dev.1](https://github.com/kaitranntt/ccs/compare/v6.7.2-dev.1...v6.8.0-dev.1) (2025-12-20)
 
 ### Features
