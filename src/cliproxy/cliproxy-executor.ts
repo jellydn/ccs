@@ -16,6 +16,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as net from 'net';
 import { ProgressIndicator } from '../utils/progress-indicator';
 import { ok, fail, info, warn } from '../utils/ui';
+import { AgyProxy } from '../agy';
 import { escapeShellArg } from '../utils/shell-executor';
 import { ensureCLIProxyBinary } from './binary-manager';
 import {
@@ -533,6 +534,26 @@ export async function execClaudeWithCLIProxy(
     });
   }
 
+  // 7a. Start AgyProxy for 'agy' provider to normalize model IDs in responses
+  // AgyProxy sits between Claude Code and CLIProxyAPI, transforming invalid
+  // model IDs like "claude-sonnet-4-5-thinking" to valid ones like "claude-sonnet-4-5-20250929"
+  let agyProxy: AgyProxy | null = null;
+  let agyProxyPort: number | null = null;
+
+  if (provider === 'agy') {
+    const upstreamUrl = `http://127.0.0.1:${cfg.port}/api/provider/agy`;
+    agyProxy = new AgyProxy({ upstreamUrl, verbose });
+
+    try {
+      agyProxyPort = await agyProxy.start();
+      log(`AgyProxy started on port ${agyProxyPort}, forwarding to ${upstreamUrl}`);
+    } catch (error) {
+      const err = error as Error;
+      console.error(fail(`AgyProxy startup failed: ${err.message}`));
+      throw new Error(`AgyProxy startup failed: ${err.message}`);
+    }
+  }
+
   // 7. Execute Claude CLI with proxied environment
   // Use remote or local env vars based on mode
   // When remote is configured (even if using local), pass config for URL rewriting
@@ -558,6 +579,13 @@ export async function execClaudeWithCLIProxy(
         cfg.customSettingsPath
       )
     : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath, remoteRewriteConfig);
+
+  // For 'agy' provider, override ANTHROPIC_BASE_URL to route through AgyProxy
+  if (agyProxyPort) {
+    envVars.ANTHROPIC_BASE_URL = `http://127.0.0.1:${agyProxyPort}/v1/messages`;
+    log(`Routing through AgyProxy: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);
+  }
+
   const webSearchEnv = getWebSearchHookEnv();
   const env = {
     ...process.env,
@@ -624,6 +652,12 @@ export async function execClaudeWithCLIProxy(
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
 
+    // Stop AgyProxy if running (doesn't persist like CLIProxyAPI)
+    if (agyProxy) {
+      agyProxy.stop();
+      log('AgyProxy stopped');
+    }
+
     // Unregister this session (proxy keeps running for persistence) - only for local mode
     if (sessionId) {
       unregisterSession(sessionId);
@@ -640,6 +674,11 @@ export async function execClaudeWithCLIProxy(
   claude.on('error', (error) => {
     console.error(fail(`Claude CLI error: ${error}`));
 
+    // Stop AgyProxy if running
+    if (agyProxy) {
+      agyProxy.stop();
+    }
+
     // Unregister session, proxy keeps running (local mode only)
     if (sessionId) {
       unregisterSession(sessionId);
@@ -650,6 +689,12 @@ export async function execClaudeWithCLIProxy(
   // Handle parent process termination (SIGTERM, SIGINT)
   const cleanup = () => {
     log('Parent signal received, cleaning up');
+
+    // Stop AgyProxy if running
+    if (agyProxy) {
+      agyProxy.stop();
+      log('AgyProxy stopped');
+    }
 
     // Unregister session, proxy keeps running (local mode only)
     if (sessionId) {
