@@ -14,6 +14,7 @@
  */
 
 import * as http from 'http';
+import * as https from 'https';
 
 import { normalizeModelId } from './model-normalizer';
 
@@ -84,17 +85,21 @@ export class AgyProxy {
 
       // Forward request to upstream
       const upstreamUrl = new URL(req.url || '/', this.upstreamUrl);
+      const isHttps = upstreamUrl.protocol === 'https:';
+      const httpModule = isHttps ? https : http;
 
-      const upstreamReq = http.request(
+      const upstreamReq = httpModule.request(
         {
           hostname: upstreamUrl.hostname,
-          port: upstreamUrl.port || 80,
+          port: upstreamUrl.port || (isHttps ? 443 : 80),
           path: upstreamUrl.pathname + upstreamUrl.search,
           method: req.method,
           headers: {
             ...req.headers,
             host: upstreamUrl.host,
           },
+          // Allow self-signed certs for remote proxy (common in dev environments)
+          ...(isHttps ? { rejectUnauthorized: false } : {}),
         },
         (upstreamRes) => {
           if (isStreaming) {

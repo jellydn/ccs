@@ -541,7 +541,10 @@ export async function execClaudeWithCLIProxy(
   let agyProxyPort: number | null = null;
 
   if (provider === 'agy') {
-    const upstreamUrl = `http://127.0.0.1:${cfg.port}/api/provider/agy`;
+    // Determine upstream URL based on local vs remote mode
+    const upstreamUrl = useRemoteProxy
+      ? `${proxyConfig.protocol}://${proxyConfig.host}:${proxyConfig.port}/api/provider/agy`
+      : `http://127.0.0.1:${cfg.port}/api/provider/agy`;
     agyProxy = new AgyProxy({ upstreamUrl, verbose });
 
     try {
