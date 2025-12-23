@@ -73,6 +73,7 @@ export class AgyProxy {
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const startTime = Date.now();
     this.log(`Request: ${req.method} ${req.url}`);
+    this.log(`Request headers: ${JSON.stringify(req.headers)}`);
 
     try {
       // Read request body
@@ -85,6 +86,8 @@ export class AgyProxy {
 
       // Forward request to upstream
       const upstreamUrl = new URL(req.url || '/', this.upstreamUrl);
+      this.log(`Upstream URL: ${upstreamUrl.href}`);
+      this.log(`Upstream path: ${upstreamUrl.pathname + upstreamUrl.search}`);
       const isHttps = upstreamUrl.protocol === 'https:';
       const httpModule = isHttps ? https : http;
 
