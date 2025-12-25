@@ -1,3 +1,29 @@
+## [7.7.0](https://github.com/kaitranntt/ccs/compare/v7.6.0...v7.7.0) (2025-12-25)
+
+### Features
+
+* **api:** add Minimax, DeepSeek, Qwen provider presets ([e7066b9](https://github.com/kaitranntt/ccs/commit/e7066b99972129114fb223c6cde40f3127599ae6)), closes [#123](https://github.com/kaitranntt/ccs/issues/123)
+* **kiro:** add UI toggle and auth hint for --no-incognito option ([083e674](https://github.com/kaitranntt/ccs/commit/083e67426c382ce534bed4830bedbede94cfdca7))
+* **kiro:** improve auth UX with normal browser default and URL display ([df0c947](https://github.com/kaitranntt/ccs/commit/df0c94781e5f198f867723e1b5bccf17d6c4b250))
+
+### Bug Fixes
+
+* **cliproxy:** preserve user API keys during config regeneration ([2b4d21e](https://github.com/kaitranntt/ccs/commit/2b4d21e8ae615c840d76007d733017d375e6036f)), closes [#200](https://github.com/kaitranntt/ccs/issues/200)
+* **core:** address all code review issues from PR [#199](https://github.com/kaitranntt/ccs/issues/199) ([f2a4200](https://github.com/kaitranntt/ccs/commit/f2a4200625e13754c7f79738dba0562e8ff27895))
+* **kiro:** add --no-incognito option for normal browser auth ([13e4bac](https://github.com/kaitranntt/ccs/commit/13e4baca228313462b3e0e83d0b97594654a989b))
+* **profiles:** prevent GLM auth regression from first-time install detection ([cc2d62d](https://github.com/kaitranntt/ccs/commit/cc2d62db38977fd5a0597388c2882e3600e5e179)), closes [#195](https://github.com/kaitranntt/ccs/issues/195)
+* **qwen:** inherit stdin for Device Code flows to enable interactive prompts ([c811fdf](https://github.com/kaitranntt/ccs/commit/c811fdfc7914cc3bde3811ea04281055ebb3e273)), closes [#188](https://github.com/kaitranntt/ccs/issues/188)
+* **ui:** add gemini-3-flash-preview to model dropdowns ([50653d1](https://github.com/kaitranntt/ccs/commit/50653d1054f89f0eaff24a6d8f471266269383b6)), closes [#194](https://github.com/kaitranntt/ccs/issues/194)
+* **ui:** respect initialMode in profile create dialog ([db3662b](https://github.com/kaitranntt/ccs/commit/db3662b47986269ba9c12385021f4aa4bd1633f6))
+
+### Code Refactoring
+
+* **paths:** use expandPath() consistently for cross-platform path handling ([adb6222](https://github.com/kaitranntt/ccs/commit/adb6222bc671c3c4ade1bb019705a985de1947fa))
+
+### Tests
+
+* **auth:** add comprehensive tests for GLM auth persistence fix ([92a79aa](https://github.com/kaitranntt/ccs/commit/92a79aa78ba14aaf2b22f10eaab23f6e04220b17))
+
 ## [7.6.0](https://github.com/kaitranntt/ccs/compare/v7.5.1...v7.6.0) (2025-12-24)
 
 ### Features
