@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { RefreshCw, AlertCircle, Key, X, Gauge, Globe } from 'lucide-react';
+import { RefreshCw, AlertCircle, Key, X, Gauge, Globe, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import type { CliproxyServerConfig } from '@/lib/api-client';
@@ -233,6 +233,13 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
                   : authToken || 'ccs'}
               </code>
             </span>
+            <a
+              href="/settings?tab=auth"
+              className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
+              title="Manage auth tokens"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </a>
             <button
               className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
               onClick={() => setShowLoginHint(false)}
