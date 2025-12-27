@@ -27,10 +27,24 @@ export function getCcsDir(): string {
 }
 
 /**
- * Get config file path
+ * Get config file path (legacy JSON path)
+ * @deprecated Use getActiveConfigPath() for mode-aware config path
  */
 export function getConfigPath(): string {
   return process.env.CCS_CONFIG || path.join(getCcsHome(), '.ccs', 'config.json');
+}
+
+/**
+ * Get the active config file path based on current mode.
+ * Returns config.yaml in unified mode, config.json in legacy mode.
+ * @returns Path to the active config file
+ */
+export function getActiveConfigPath(): string {
+  const ccsDir = getCcsDir();
+  if (isUnifiedMode()) {
+    return path.join(ccsDir, 'config.yaml');
+  }
+  return path.join(ccsDir, 'config.json');
 }
 
 /**
@@ -126,7 +140,8 @@ export function loadConfigSafe(): Config {
   const configPath = getConfigPath();
 
   if (!fs.existsSync(configPath)) {
-    throw new Error(`Config not found: ${configPath}`);
+    // Return empty config for graceful degradation (matches unified mode behavior)
+    return { profiles: {} };
   }
 
   const raw = fs.readFileSync(configPath, 'utf8');

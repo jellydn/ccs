@@ -291,6 +291,18 @@ async function main(): Promise<void> {
     await autoMigrate();
   }
 
+  // Auto-recovery for missing configuration (BEFORE any early-exit commands)
+  // This ensures ALL commands benefit from auto-recovery, not just profile-switching flow
+  // Recovery is safe to run early - it only creates missing files with safe defaults
+  const RecoveryManagerModule = await import('./management/recovery-manager');
+  const RecoveryManager = RecoveryManagerModule.default;
+  const recovery = new RecoveryManager();
+  const recovered = recovery.recoverAll();
+
+  if (recovered) {
+    recovery.showRecoveryHints();
+  }
+
   // Special case: version command (check BEFORE profile detection)
   if (firstArg === 'version' || firstArg === '--version' || firstArg === '-v') {
     handleVersionCommand();
@@ -453,16 +465,6 @@ async function main(): Promise<void> {
     const handler = new DelegationHandler();
     await handler.route(args);
     return;
-  }
-
-  // Auto-recovery for missing configuration
-  const RecoveryManagerModule = await import('./management/recovery-manager');
-  const RecoveryManager = RecoveryManagerModule.default;
-  const recovery = new RecoveryManager();
-  const recovered = recovery.recoverAll();
-
-  if (recovered) {
-    recovery.showRecoveryHints();
   }
 
   // First-time install: offer setup wizard for interactive users
