@@ -129,6 +129,13 @@ router.put('/:profile', (req: Request, res: Response): void => {
   try {
     const { profile } = req.params;
     const { settings, expectedMtime } = req.body;
+
+    // Validate settings object exists
+    if (!settings || typeof settings !== 'object') {
+      res.status(400).json({ error: 'settings object is required in request body' });
+      return;
+    }
+
     const ccsDir = getCcsDir();
 
     // Check for missing required fields (warning, not blocking - runtime fills defaults)
