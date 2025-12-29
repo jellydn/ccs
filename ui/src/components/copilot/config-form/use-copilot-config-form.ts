@@ -8,17 +8,13 @@ import { useCopilot } from '@/hooks/use-copilot';
 import { toast } from 'sonner';
 import type { ModelPreset } from './types';
 
-/** Required env vars for Copilot settings to function */
+/** Required env vars for Copilot settings (informational only - runtime fills defaults) */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
 
-/** Validate settings have required fields */
-function validateSettings(settings: { env?: Record<string, string> } | undefined): {
-  valid: boolean;
-  missing: string[];
-} {
+/** Check settings for missing fields (for UI warnings) */
+function checkMissingFields(settings: { env?: Record<string, string> } | undefined): string[] {
   const env = settings?.env || {};
-  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
-  return { valid: missing.length === 0, missing };
+  return REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
 }
 
 export function useCopilotConfigForm() {
@@ -114,7 +110,7 @@ export function useCopilotConfigForm() {
     return hasLocalChanges || hasJsonChanges;
   }, [localOverrides, rawJsonEdits, rawSettings]);
 
-  // Validation state for missing required fields
+  // Validation state for missing required fields (informational warning)
   const currentSettingsForValidation = useMemo(() => {
     if (rawJsonEdits !== null) {
       try {
@@ -126,8 +122,8 @@ export function useCopilotConfigForm() {
     return rawSettings?.settings;
   }, [rawJsonEdits, rawSettings?.settings]);
 
-  const validationResult = useMemo(
-    () => validateSettings(currentSettingsForValidation),
+  const missingFields = useMemo(
+    () => checkMissingFields(currentSettingsForValidation),
     [currentSettingsForValidation]
   );
 
@@ -149,30 +145,31 @@ export function useCopilotConfigForm() {
         });
       }
 
-      // Save raw JSON changes
+      // Save raw JSON changes (no blocking validation - runtime uses defaults)
       if (rawJsonEdits !== null && isRawJsonValid) {
         const settingsToSave = JSON.parse(rawJsonContent);
-
-        // Validate required fields before saving
-        const validation = validateSettings(settingsToSave);
-        if (!validation.valid) {
-          toast.error(`Missing required fields: ${validation.missing.join(', ')}`, {
-            description: 'Apply a preset or add these fields manually.',
-            duration: 6000,
-          });
-          return;
-        }
+        const missing = checkMissingFields(settingsToSave);
 
         await saveRawSettingsAsync({
           settings: settingsToSave,
           expectedMtime: rawSettings?.mtime,
         });
+
+        // Show warning if fields missing
+        if (missing.length > 0) {
+          toast.success('Copilot configuration saved', {
+            description: `Missing fields will use defaults: ${missing.join(', ')}`,
+          });
+        } else {
+          toast.success('Copilot configuration saved');
+        }
+      } else {
+        toast.success('Copilot configuration saved');
       }
 
       // Clear local state
       setLocalOverrides({});
       setRawJsonEdits(null);
-      toast.success('Copilot configuration saved');
     } catch (error) {
       if ((error as Error).message === 'CONFLICT') {
         setConflictDialog(true);
@@ -231,7 +228,7 @@ export function useCopilotConfigForm() {
     handleConflictResolve,
     refetchRawSettings,
 
-    /** List of required env vars that are missing (empty if all present) */
-    missingRequiredFields: validationResult.missing,
+    /** List of required env vars that are missing (empty if all present) - informational */
+    missingRequiredFields: missingFields,
   };
 }

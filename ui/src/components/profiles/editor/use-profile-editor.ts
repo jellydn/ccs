@@ -8,17 +8,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Settings, SettingsResponse } from './types';
 
-/** Required env vars for profiles to function */
+/** Required env vars for profiles to function (informational only - runtime fills defaults) */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
 
-/** Validate settings have required fields */
-function validateSettings(settings: Settings | undefined): {
-  valid: boolean;
-  missing: string[];
-} {
+/** Check settings for missing fields (for UI warnings) */
+function checkMissingFields(settings: Settings | undefined): string[] {
   const env = settings?.env || {};
-  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
-  return { valid: missing.length === 0, missing };
+  return REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
 }
 
 interface UseProfileEditorOptions {
@@ -91,8 +87,8 @@ export function useProfileEditor({
     return Object.keys(localEdits).length > 0;
   }, [rawJsonEdits, localEdits, query.data?.settings]);
 
-  // Validation state for missing required fields
-  const validationResult = useMemo(() => validateSettings(currentSettings), [currentSettings]);
+  // Validation state for missing required fields (informational warning)
+  const missingFields = useMemo(() => checkMissingFields(currentSettings), [currentSettings]);
 
   // Save mutation
   const saveMutation = useMutation({
@@ -109,12 +105,6 @@ export function useProfileEditor({
             ...localEdits,
           },
         };
-      }
-
-      // Validate required fields before saving
-      const validation = validateSettings(settingsToSave);
-      if (!validation.valid) {
-        throw new Error(`MISSING_REQUIRED:${validation.missing.join(',')}`);
       }
 
       const res = await fetch(`/api/settings/${profileName}`, {
@@ -136,21 +126,22 @@ export function useProfileEditor({
 
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['settings', profileName] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       onSuccess();
-      toast.success('Settings saved');
+      // Show warning if fields missing (runtime uses defaults)
+      if (data?.warning) {
+        toast.success('Settings saved', {
+          description: data.warning,
+        });
+      } else {
+        toast.success('Settings saved');
+      }
     },
     onError: (error: Error) => {
       if (error.message === 'CONFLICT') {
         onConflict();
-      } else if (error.message.startsWith('MISSING_REQUIRED:')) {
-        const missing = error.message.replace('MISSING_REQUIRED:', '').split(',');
-        toast.error(`Missing required fields: ${missing.join(', ')}`, {
-          description: 'Apply a preset or add these fields manually.',
-          duration: 6000,
-        });
       } else {
         toast.error(error.message);
       }
@@ -163,7 +154,7 @@ export function useProfileEditor({
     isRawJsonValid,
     hasChanges,
     saveMutation,
-    /** List of required env vars that are missing (empty if all present) */
-    missingRequiredFields: validationResult.missing,
+    /** List of required env vars that are missing (empty if all present) - informational */
+    missingRequiredFields: missingFields,
   };
 }

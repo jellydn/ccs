@@ -116,11 +116,10 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
 /** Required env vars for CLIProxy providers to function */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
 
-/** Validate settings have required fields */
-function validateRequiredEnvVars(settings: Settings): { valid: boolean; missing: string[] } {
+/** Check if settings have required fields (returns missing list for warnings) */
+function checkRequiredEnvVars(settings: Settings): string[] {
   const env = settings?.env || {};
-  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
-  return { valid: missing.length === 0, missing };
+  return REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
 }
 
 /**
@@ -132,15 +131,8 @@ router.put('/:profile', (req: Request, res: Response): void => {
     const { settings, expectedMtime } = req.body;
     const ccsDir = getCcsDir();
 
-    // Validate required fields before saving
-    const validation = validateRequiredEnvVars(settings);
-    if (!validation.valid) {
-      res.status(400).json({
-        error: `Missing required fields: ${validation.missing.join(', ')}`,
-        fields: validation.missing,
-      });
-      return;
-    }
+    // Check for missing required fields (warning, not blocking - runtime fills defaults)
+    const missingFields = checkRequiredEnvVars(settings);
     const settingsPath = resolveSettingsPath(profile);
 
     const fileExists = fs.existsSync(settingsPath);
@@ -185,6 +177,11 @@ router.put('/:profile', (req: Request, res: Response): void => {
       mtime: newStat.mtime.getTime(),
       backupPath,
       created: !fileExists,
+      // Include warning if fields missing (runtime will use defaults)
+      ...(missingFields.length > 0 && {
+        warning: `Missing fields will use defaults: ${missingFields.join(', ')}`,
+        missingFields,
+      }),
     });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
